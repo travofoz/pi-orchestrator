@@ -38,24 +38,23 @@
  * The above values will be the same _even if_ different values for `ENVIRONMENT` or `PUBLIC_BASE_URL` are set at runtime, as they are statically replaced in your code with their build time values.
  */
 declare module '$env/static/private' {
-	export const TMUX: string;
 	export const OPENROUTER_API_KEY: string;
+	export const TMUX: string;
 	export const MAIL: string;
 	export const USER: string;
 	export const npm_config_user_agent: string;
-	export const XDG_SESSION_TYPE: string;
 	export const BUN_INSTALL: string;
+	export const XDG_SESSION_TYPE: string;
 	export const npm_node_execpath: string;
 	export const SHLVL: string;
 	export const npm_config_noproxy: string;
-	export const LESS: string;
 	export const HOME: string;
+	export const LESS: string;
 	export const OLDPWD: string;
-	export const TERM_PROGRAM_VERSION: string;
 	export const NVM_BIN: string;
+	export const TERM_PROGRAM_VERSION: string;
 	export const npm_package_json: string;
 	export const LSCOLORS: string;
-	export const PI_CODING_AGENT: string;
 	export const NVM_INC: string;
 	export const ZSH: string;
 	export const PAGER: string;
@@ -93,8 +92,8 @@ declare module '$env/static/private' {
 	export const npm_config_allow_scripts: string;
 	export const npm_command: string;
 	export const TMUX_PLUGIN_MANAGER_PATH: string;
-	export const TMUX_PANE: string;
 	export const OPENCODE_API_KEY: string;
+	export const TMUX_PANE: string;
 	export const INIT_CWD: string;
 	export const EDITOR: string;
 	export const NODE_ENV: string;
@@ -184,24 +183,23 @@ declare module '$env/static/public' {
  */
 declare module '$env/dynamic/private' {
 	export const env: {
-		TMUX: string;
 		OPENROUTER_API_KEY: string;
+		TMUX: string;
 		MAIL: string;
 		USER: string;
 		npm_config_user_agent: string;
-		XDG_SESSION_TYPE: string;
 		BUN_INSTALL: string;
+		XDG_SESSION_TYPE: string;
 		npm_node_execpath: string;
 		SHLVL: string;
 		npm_config_noproxy: string;
-		LESS: string;
 		HOME: string;
+		LESS: string;
 		OLDPWD: string;
-		TERM_PROGRAM_VERSION: string;
 		NVM_BIN: string;
+		TERM_PROGRAM_VERSION: string;
 		npm_package_json: string;
 		LSCOLORS: string;
-		PI_CODING_AGENT: string;
 		NVM_INC: string;
 		ZSH: string;
 		PAGER: string;
@@ -239,8 +237,8 @@ declare module '$env/dynamic/private' {
 		npm_config_allow_scripts: string;
 		npm_command: string;
 		TMUX_PLUGIN_MANAGER_PATH: string;
-		TMUX_PANE: string;
 		OPENCODE_API_KEY: string;
+		TMUX_PANE: string;
 		INIT_CWD: string;
 		EDITOR: string;
 		NODE_ENV: string;
