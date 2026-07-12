@@ -35,7 +35,7 @@
 	let selectedEntryId = $state('');
 
 	$effect(() => {
-		if ($githubToken && $githubRepo) {
+		if ($githubRepo) {
 			loadEntries();
 		}
 	});
