@@ -4869,7 +4869,7 @@ var options = {
 		app: ({ head, body, assets, nonce, env }) => "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n	<meta charset=\"utf-8\" />\n	<link rel=\"icon\" href=\"" + assets + "/favicon.svg\" type=\"image/svg+xml\" />\n	<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n	" + head + "\n</head>\n<body data-sveltekit-prerender=\"true\">\n	<div style=\"display: contents\">" + body + "</div>\n</body>\n</html>\n",
 		error: error_template_default
 	},
-	version_hash: "tiqsok"
+	version_hash: "1kuzegr"
 };
 async function get_hooks() {
 	let handle;

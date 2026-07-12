@@ -251,10 +251,38 @@ export function createFreehand(pathData, style = {}) {
 }
 
 /**
+ * Compute arrowhead wing points as raw coordinates, without scaling.
+ * The returned points describe the arrowhead at the tip (x2,y2) with
+ * a default head length of ~12px (scaled proportionally to strokeWidth).
+ * Consumers apply their own scaling (canvas scale factor, etc.) by
+ * multiplying the returned coordinates.
+ *
+ * @param {number} x1 - start x (tail)
+ * @param {number} y1 - start y (tail)
+ * @param {number} x2 - end x (head tip)
+ * @param {number} y2 - end y (head tip)
+ * @param {number} strokeWidth - line stroke width (affects head size)
+ * @returns {{ tipX: number, tipY: number, wing1X: number, wing1Y: number, wing2X: number, wing2Y: number }}
+ */
+export function arrowHeadPoints(x1, y1, x2, y2, strokeWidth) {
+	const angle = Math.atan2(y2 - y1, x2 - x1);
+	const baseLen = Math.min(12, Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) * 0.3);
+	const headLen = baseLen * (1 + (strokeWidth - 2) * 0.15);
+	const headAngle = Math.PI / 6;
+	return {
+		tipX: x2,
+		tipY: y2,
+		wing1X: x2 - headLen * Math.cos(angle - headAngle),
+		wing1Y: y2 - headLen * Math.sin(angle - headAngle),
+		wing2X: x2 - headLen * Math.cos(angle + headAngle),
+		wing2Y: y2 - headLen * Math.sin(angle + headAngle)
+	};
+}
+
+/**
  * Compute arrowhead polygon points string for SVG polygon points attribute.
  * Scales the arrow head size proportionally to strokeWidth so thicker
- * strokes get larger arrowheads. This is the canonical implementation;
- * consumers should import this rather than duplicating the logic.
+ * strokes get larger arrowheads. Delegates geometry to {@link arrowHeadPoints}.
  *
  * @param {number} x1 - start x (tail)
  * @param {number} y1 - start y (tail)
@@ -264,15 +292,8 @@ export function createFreehand(pathData, style = {}) {
  * @returns {string} SVG points string, e.g. "100,100 90,95 90,105"
  */
 export function arrowHead(x1, y1, x2, y2, strokeWidth) {
-	const angle = Math.atan2(y2 - y1, x2 - x1);
-	const baseLen = Math.min(12, Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) * 0.3);
-	const headLen = baseLen * (1 + (strokeWidth - 2) * 0.15);
-	const headAngle = Math.PI / 6;
-	const hx1 = x2 - headLen * Math.cos(angle - headAngle);
-	const hy1 = y2 - headLen * Math.sin(angle - headAngle);
-	const hx2 = x2 - headLen * Math.cos(angle + headAngle);
-	const hy2 = y2 - headLen * Math.sin(angle + headAngle);
-	return `${x2},${y2} ${hx1},${hy1} ${hx2},${hy2}`;
+	const pts = arrowHeadPoints(x1, y1, x2, y2, strokeWidth);
+	return `${pts.tipX},${pts.tipY} ${pts.wing1X},${pts.wing1Y} ${pts.wing2X},${pts.wing2Y}`;
 }
 
 /**

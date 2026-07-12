@@ -33,3 +33,16 @@
 
 - [ ] **Deduplicate `arrowHead` logic** — Export the arrowhead triangle calculation from `src/lib/annotations.js` and import it in `src/lib/components/AnnotationEditor.svelte`, replacing the duplicated `arrowHead` function, so arrow rendering is maintained in one canonical location.
 
+### Remediation 3
+
+## Tasks
+
+- [ ] **Fix `setInterval` fixed delay breaking per-slide durations in slideshow preview** — `src/routes/slideshow/+page.svelte` `startPlay()` captures `slides[0]?.delay` once at interval creation; all subsequent slides play at that fixed rate. Replace `setInterval` with recursive `setTimeout` that reads `slides[previewIndex]?.delay` on every tick.
+- [ ] **Revoke previous blob URL on file re-select and re-drop** — `src/routes/+page.svelte` `handleFileSelect` and `ondrop` call `URL.createObjectURL(file)` without revoking any prior `uploadPreview`. Call `URL.revokeObjectURL(uploadPreview)` before overwriting it in both handlers.
+- [ ] **Eliminate duplicate `estimateGifSize` call in GIF export** — `src/lib/gif-export.js` `exportAndCommitGIF` calls `encodeGIF` (which internally estimates size) and then calls `estimateGifSize` again for metadata dimensions. Derive effective dimensions from `encodeGIF`'s return value or pass the effective scale back instead of re-estimating.
+- [ ] **Replace `||` with `??` in `effectiveScale` fallback** — `src/lib/gif-export.js` line ~310: `const effectiveScale = scale || estimateGifSize(...)` treats `0` (a falsy but valid value) as absent. Change to `scale ?? estimateGifSize(...)`.
+- [ ] **Remove vestigial `e.preventDefault()` in `saveConnect`** — `src/routes/+layout.svelte` `saveConnect` calls `e.preventDefault()` but is wired to a `<button type="button">` with no `<form>` parent, making the call a no-op. Either remove the parameter and `e.preventDefault()`, or wrap the modal content in `<form onsubmit={saveConnect}>` to make keyboard submission work.
+- [ ] **Wrap connect modal in `<form>` for keyboard submission** — `src/routes/+layout.svelte` lines 94–168: the repo/token inputs and Connect button are not inside a `<form>`, so pressing Enter does nothing. Wrap inputs and button in `<form onsubmit={saveConnect}>` (or handle the submit event) to enable keyboard submission and fix the related UX/accessibility gap.
+- [ ] **Centralize `raw.githubusercontent.com` URL construction into a shared utility** — `src/lib/gallery.js:67`, `src/lib/upload.js:213`, `src/lib/gif-export.js:329`, and `src/routes/annotate/[id]/+page.svelte:55` each hand-assemble `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/images/${filename}` without URL-encoding branch or filename. Extract a `rawFileUrl(owner, repo, branch, path)` utility that applies `encodeURIComponent` to branch and path segments, and use it in all four locations.
+- [ ] **Deduplicate `arrowHead` geometry between `gif-export.js` and `annotations.js`** — `src/lib/gif-export.js` contains its own inline arrowhead calculation with canvas scaling; import the base geometry from `src/lib/annotations.js` and apply canvas scaling separately instead of maintaining a duplicate implementation.
+

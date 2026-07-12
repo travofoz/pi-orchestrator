@@ -12,7 +12,7 @@
  * 4. Return a Blob for download or GitHub upload
  */
 
-import { renderAnnotationsSVG, isTransparent } from '$lib/annotations.js';
+import { isTransparent, arrowHeadPoints } from '$lib/annotations.js';
 import { putBinaryFile, putFile, getDefaultBranch } from './github.js';
 import { generateImageId, buildMetadata, blobToBase64 } from './upload.js';
 
@@ -143,18 +143,18 @@ function drawAnnotationsOnCanvas(ctx, annotations, origWidth, origHeight, canvas
 				ctx.moveTo(x1, y1);
 				ctx.lineTo(x2, y2);
 				ctx.stroke();
-				// Arrowhead
-				const angle = Math.atan2(y2 - y1, x2 - x1);
-				const headLen = Math.min(12, Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) * 0.3) * Math.min(sx, sy);
-				const ha = Math.PI / 6;
-				const hx1 = x2 - headLen * Math.cos(angle - ha);
-				const hy1 = y2 - headLen * Math.sin(angle - ha);
-				const hx2 = x2 - headLen * Math.cos(angle + ha);
-				const hy2 = y2 - headLen * Math.sin(angle + ha);
+				// Arrowhead — reuse shared geometry from annotations.js.
+				// Use un-scaled image-pixel coordinates for geometry, then
+				// scale the result to canvas pixels.
+				const pts = arrowHeadPoints(
+					shape.x, shape.y,
+					shape.endX || 0, shape.endY || 0,
+					shape.strokeWidth || 2
+				);
 				ctx.beginPath();
-				ctx.moveTo(x2, y2);
-				ctx.lineTo(hx1, hy1);
-				ctx.lineTo(hx2, hy2);
+				ctx.moveTo(pts.wing1X * sx, pts.wing1Y * sy);
+				ctx.lineTo(pts.tipX * sx, pts.tipY * sy);
+				ctx.lineTo(pts.wing2X * sx, pts.wing2Y * sy);
 				ctx.closePath();
 				if (hasFill) ctx.fill();
 				ctx.stroke();
