@@ -152,9 +152,14 @@
 	<!-- Header -->
 	<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
 		<h2 class="text-2xl font-bold">Gallery</h2>
-		<button class="btn btn-ghost btn-sm" onclick={loadGallery}>
-			Refresh
-		</button>
+		<div class="flex gap-2">
+			<a href="/slideshow" class="btn btn-primary btn-sm">
+				Create GIF
+			</a>
+			<button class="btn btn-ghost btn-sm" onclick={loadGallery}>
+				Refresh
+			</button>
+		</div>
 	</div>
 
 	<!-- Upload Section -->

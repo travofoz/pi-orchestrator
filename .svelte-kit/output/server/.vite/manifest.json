@@ -132,7 +132,7 @@
       "_stores.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.CZQiorK4.css"
+      "_app/immutable/assets/_layout.Bh504rkw.css"
     ]
   },
   "src/routes/+page.svelte": {
@@ -162,6 +162,23 @@
       "_server.js",
       "_stores.js",
       "_client.js",
+      "_navigation.js"
+    ]
+  },
+  "src/routes/slideshow/+page.js": {
+    "file": "entries/pages/slideshow/_page.js",
+    "name": "entries/pages/slideshow/_page",
+    "src": "src/routes/slideshow/+page.js",
+    "isEntry": true
+  },
+  "src/routes/slideshow/+page.svelte": {
+    "file": "entries/pages/slideshow/_page.svelte.js",
+    "name": "entries/pages/slideshow/_page.svelte",
+    "src": "src/routes/slideshow/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_server.js",
+      "_stores.js",
       "_navigation.js"
     ]
   },
