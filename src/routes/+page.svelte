@@ -50,7 +50,7 @@
 	}
 
 	$effect(() => {
-		if ($githubToken && $githubRepo) {
+		if ($githubRepo) {
 			loadGallery();
 		}
 	});
@@ -181,65 +181,76 @@
 		</div>
 	</div>
 
-	<!-- Upload Section -->
-	<div class="collapse collapse-arrow bg-base-100 border border-base-300">
-		<input type="checkbox" />
-		<div class="collapse-title font-medium">Upload Image</div>
-		<div class="collapse-content">
-			{#if !uploadFile}
-				<div class="flex items-center justify-center w-full">
-					<label
-						for="file-upload"
-						class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-base-200"
-					>
-						<div class="flex flex-col items-center justify-center pt-5 pb-6">
-							<svg class="w-8 h-8 mb-2 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-							</svg>
-							<p class="mb-2 text-sm text-base-content/50">
-								<span class="font-semibold">Click to select</span> or drag and drop
-							</p>
-							<p class="text-xs text-base-content/40">PNG, JPG, JPEG, GIF, WebP</p>
-						</div>
-						<input id="file-upload" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden" onchange={handleFileSelect} />
-					</label>
-				</div>
-			{:else}
-				<div class="flex flex-col sm:flex-row gap-4">
-					<div class="w-full sm:w-48">
-						<img src={uploadPreview} alt="Preview" class="w-full rounded border" />
+	<!-- Upload Section (gated behind auth) -->
+	{#if $isConnected}
+		<div class="collapse collapse-arrow bg-base-100 border border-base-300">
+			<input type="checkbox" />
+			<div class="collapse-title font-medium">Upload Image</div>
+			<div class="collapse-content">
+				{#if !uploadFile}
+					<div class="flex items-center justify-center w-full">
+						<label
+							for="file-upload"
+							class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-base-200"
+						>
+							<div class="flex flex-col items-center justify-center pt-5 pb-6">
+								<svg class="w-8 h-8 mb-2 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+								</svg>
+								<p class="mb-2 text-sm text-base-content/50">
+									<span class="font-semibold">Click to select</span> or drag and drop
+								</p>
+								<p class="text-xs text-base-content/40">PNG, JPG, JPEG, GIF, WebP</p>
+							</div>
+							<input id="file-upload" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden" onchange={handleFileSelect} />
+						</label>
 					</div>
-					<div class="flex-1 space-y-3">
-						<p class="text-sm truncate">{uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)</p>
-						<input
-							type="text"
-							bind:value={uploadTags}
-							placeholder="Tags (comma-separated)"
-							class="input input-bordered input-sm w-full"
-						/>
-						<input
-							type="text"
-							bind:value={uploadCaption}
-							placeholder="Caption (optional)"
-							class="input input-bordered input-sm w-full"
-						/>
-						{#if uploadError}
-							<div class="alert alert-error text-sm p-2">{uploadError}</div>
-						{/if}
-						<div class="flex gap-2">
-							<button class="btn btn-primary btn-sm" onclick={handleUpload} disabled={uploading}>
-								{#if uploading}
-									<span class="loading loading-spinner loading-xs"></span>
-								{/if}
-								Upload
-							</button>
-							<button class="btn btn-ghost btn-sm" onclick={clearUpload}>Cancel</button>
+				{:else}
+					<div class="flex flex-col sm:flex-row gap-4">
+						<div class="w-full sm:w-48">
+							<img src={uploadPreview} alt="Preview" class="w-full rounded border" />
+						</div>
+						<div class="flex-1 space-y-3">
+							<p class="text-sm truncate">{uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)</p>
+							<input
+								type="text"
+								bind:value={uploadTags}
+								placeholder="Tags (comma-separated)"
+								class="input input-bordered input-sm w-full"
+							/>
+							<input
+								type="text"
+								bind:value={uploadCaption}
+								placeholder="Caption (optional)"
+								class="input input-bordered input-sm w-full"
+							/>
+							{#if uploadError}
+								<div class="alert alert-error text-sm p-2">{uploadError}</div>
+							{/if}
+							<div class="flex gap-2">
+								<button class="btn btn-primary btn-sm" onclick={handleUpload} disabled={uploading}>
+									{#if uploading}
+										<span class="loading loading-spinner loading-xs"></span>
+									{/if}
+									Upload
+								</button>
+								<button class="btn btn-ghost btn-sm" onclick={clearUpload}>Cancel</button>
+							</div>
 						</div>
 					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
 		</div>
-	</div>
+	{:else}
+		<div class="alert bg-base-100 border border-base-300 text-sm">
+			<span>
+				<button class="link link-primary" onclick={() => window.dispatchEvent(new CustomEvent('open-connect'))}>
+					Connect GitHub
+				</button>
+				to upload images, add annotations, and manage your gallery.
+			</span>
+		</div>
+	{/if}
 
 	<!-- Upload Success Toast -->
 	{#if uploadSuccess}
@@ -339,25 +350,29 @@
 							>
 								{copiedId === entry.rawUrl ? 'Copied!' : 'Copy Link'}
 							</button>
-							<button
-								class="btn btn-ghost btn-xs"
-								onclick={() => goAnnotate(entry.id)}
-							>
-								Annotate
-							</button>
+							{#if $isConnected}
+								<button
+									class="btn btn-ghost btn-xs"
+									onclick={() => goAnnotate(entry.id)}
+								>
+									Annotate
+								</button>
+							{/if}
 							<button
 								class="btn btn-ghost btn-xs"
 								onclick={() => openDetail(entry)}
 							>
 								View
 							</button>
-							<button
-								class="btn btn-ghost btn-xs text-error"
-								onclick={() => handleDelete(entry.id, entry.filename.split('.').pop())}
-								disabled={deletingId === entry.id}
-							>
-								{deletingId === entry.id ? 'Deleting…' : 'Delete'}
-							</button>
+							{#if $isConnected}
+								<button
+									class="btn btn-ghost btn-xs text-error"
+									onclick={() => handleDelete(entry.id, entry.filename.split('.').pop())}
+									disabled={deletingId === entry.id}
+								>
+									{deletingId === entry.id ? 'Deleting…' : 'Delete'}
+								</button>
+							{/if}
 						</div>
 					</div>
 				</div>
@@ -428,12 +443,14 @@
 					{copiedId === detailEntry.rawUrl ? 'Copied!' : 'Copy Raw URL'}
 				</button>
 				<a href={detailEntry.rawUrl} target="_blank" rel="noopener noreferrer" class="btn btn-sm">Open Original</a>
-				<button class="btn btn-sm btn-primary" onclick={() => { const id = detailEntry.id; closeDetail(); goAnnotate(id); }}>
-					Annotate
-				</button>
-				<button class="btn btn-sm btn-error" onclick={() => { const id = detailEntry.id; const ext = detailEntry.filename.split('.').pop(); closeDetail(); handleDelete(id, ext); }}>
-					{deletingId === detailEntry.id ? 'Deleting…' : 'Delete'}
-				</button>
+				{#if $isConnected}
+					<button class="btn btn-sm btn-primary" onclick={() => { const id = detailEntry.id; closeDetail(); goAnnotate(id); }}>
+						Annotate
+					</button>
+					<button class="btn btn-sm btn-error" onclick={() => { const id = detailEntry.id; const ext = detailEntry.filename.split('.').pop(); closeDetail(); handleDelete(id, ext); }}>
+						{deletingId === detailEntry.id ? 'Deleting…' : 'Delete'}
+					</button>
+				{/if}
 				<button class="btn btn-sm" onclick={closeDetail}>Close</button>
 			</div>
 		</div>

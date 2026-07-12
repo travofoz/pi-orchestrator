@@ -24,13 +24,12 @@ function base64Encode(str) {
 
 /**
  * Create an Octokit client from a GitHub Personal Access Token.
- * Returns null if no token is provided.
- * @param {string} token - GitHub PAT
- * @returns {OctokitInstance|null}
+ * If no token is provided, creates an unauthenticated client (works for public repos).
+ * @param {string} [token] - GitHub PAT
+ * @returns {OctokitInstance}
  */
 export function createClient(token) {
-	if (!token) return null;
-	return new Octokit({ auth: token });
+	return new Octokit({ auth: token || undefined });
 }
 
 const defaultBranchCache = new Map();

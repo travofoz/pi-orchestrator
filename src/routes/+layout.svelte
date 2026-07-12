@@ -18,6 +18,13 @@
 		showConnectModal = true;
 	}
 
+	// Listen for custom event from child pages that want to trigger connect
+	$effect(() => {
+		function handler() { openConnectModal(); }
+		window.addEventListener('open-connect', handler);
+		return () => window.removeEventListener('open-connect', handler);
+	});
+
 	function disconnect() {
 		githubToken.set(null);
 		githubRepo.set(null);
@@ -64,24 +71,7 @@
 
 	<!-- Main content -->
 	<main class="p-4 max-w-6xl mx-auto">
-		{#if !$isConnected}
-			<div class="hero min-h-[60vh]">
-				<div class="hero-content text-center">
-					<div class="max-w-md">
-						<h1 class="text-4xl font-bold mb-4">Emmy</h1>
-						<p class="text-base-content/70 mb-6">
-							Lightweight image hosting and sharing for GitHub.
-							Upload screenshots, tag them, annotate, and stitch them into GIFs.
-						</p>
-						<button class="btn btn-primary btn-lg" onclick={openConnectModal}>
-							Connect GitHub to get started
-						</button>
-					</div>
-				</div>
-			</div>
-		{:else}
-			{@render children()}
-		{/if}
+		{@render children()}
 	</main>
 </div>
 
