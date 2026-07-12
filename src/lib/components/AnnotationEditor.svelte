@@ -283,7 +283,7 @@
 						y={shape.y}
 						font-size={shape.fontSize || 16}
 						font-family={shape.fontFamily || 'sans-serif'}
-						fill={shape.strokeColor}
+						fill={isTransparent(shape.fillColor) ? shape.strokeColor : shape.fillColor}
 						opacity={getShapeOpacity(shape)}
 						class={shape.id === selectedId ? 'annotation-selected' : ''}
 					>{shape.text}</text>

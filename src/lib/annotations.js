@@ -98,7 +98,10 @@ export function renderAnnotationsSVG(annotations, imageWidth, imageHeight) {
 function renderShapeSVG(shape) {
 	const stroke = shape.strokeColor || DEFAULT_STYLES.strokeColor;
 	const strokeWidth = shape.strokeWidth || DEFAULT_STYLES.strokeWidth;
-	const fill = isTransparent(shape.fillColor) ? 'none' : shape.fillColor;
+	// For text, use strokeColor as fallback fill when fillColor is transparent
+	const fill = isTransparent(shape.fillColor)
+		? (shape.type === 'text' ? stroke : 'none')
+		: shape.fillColor;
 	const opacity = shape.opacity ?? DEFAULT_STYLES.opacity;
 	const style = `stroke="${stroke}" stroke-width="${strokeWidth}" fill="${fill}" opacity="${opacity}"`;
 
