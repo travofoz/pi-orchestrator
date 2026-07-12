@@ -26,6 +26,7 @@
 	let exportSuccess = $state('');
 	let defaultDelay = $state(2500); // ms
 	let scaleFactor = $state(1);
+	let gifTags = $state('gif');
 
 	// Available images (non-GIF entries)
 	let availableImages = $derived(allEntries.filter((e) => e.type === 'image'));
@@ -141,8 +142,9 @@
 				id: s.entry.id
 			}));
 
+			const tags = gifTags.split(',').map((t) => t.trim()).filter(Boolean);
 			const result = await exportAndCommitGIF(octokit, parsed.owner, parsed.repo, slideData, {
-				tags: ['gif'],
+				tags,
 				caption: `GIF from ${slides.length} slides`,
 				scale: scaleFactor
 			});
@@ -372,6 +374,17 @@
 								<div class="alert alert-success text-sm mb-2">{exportSuccess}</div>
 							{/if}
 							{#if $isConnected}
+								<div class="mb-3">
+									<label class="label">
+										<span class="label-text">Tags</span>
+									</label>
+									<input
+										type="text"
+										bind:value={gifTags}
+										placeholder="gif, screenshot"
+										class="input input-bordered input-sm w-full"
+									/>
+								</div>
 								<div class="flex gap-2">
 									<button
 										class="btn btn-primary"
