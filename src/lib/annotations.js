@@ -132,7 +132,10 @@ function renderShapeSVG(shape) {
 		}
 
 		case 'text':
-			return `<text x="${escapeAttr(shape.x)}" y="${escapeAttr(shape.y)}" font-size="${escapeAttr(shape.fontSize, DEFAULT_STYLES.fontSize)}" font-family="${escapeAttr(shape.fontFamily, DEFAULT_STYLES.fontFamily)}" ${style}>${escapeXML(shape.text || '')}</text>`;
+			// No stroke on text — matches editor SVG behavior.
+			// Text is rendered as filled glyphs only, avoiding spurious outlines.
+			const textStyle = `stroke="none" fill="${fill}" opacity="${opacity}"`;
+			return `<text x="${escapeAttr(shape.x)}" y="${escapeAttr(shape.y)}" font-size="${escapeAttr(shape.fontSize, DEFAULT_STYLES.fontSize)}" font-family="${escapeAttr(shape.fontFamily, DEFAULT_STYLES.fontFamily)}" ${textStyle}>${escapeXML(shape.text || '')}</text>`;
 
 		case 'freehand':
 			return `<path d="${escapeAttr(shape.pathData, '')}" ${style} fill="none" />`;

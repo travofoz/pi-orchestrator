@@ -164,14 +164,15 @@ function drawAnnotationsOnCanvas(ctx, annotations, origWidth, origHeight, canvas
 				const fontSize = (shape.fontSize || 16) * Math.min(sx, sy);
 				ctx.font = `${fontSize}px ${shape.fontFamily || 'sans-serif'}`;
 				ctx.textBaseline = 'alphabetic';
-				// Always fill text: use fillColor if available, else strokeColor
+				// Fill text only (no stroke) — matches editor SVG behavior.
+				// When fillColor is transparent, render in strokeColor for
+				// clean text-with-no-background appearance.
 				if (isTransparent(shape.fillColor)) {
 					ctx.fillStyle = shape.strokeColor;
 				} else {
 					ctx.fillStyle = shape.fillColor;
 				}
 				ctx.fillText(shape.text || '', x, y);
-				ctx.strokeText(shape.text || '', x, y);
 				break;
 			}
 			case 'freehand': {
