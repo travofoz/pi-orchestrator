@@ -1,5 +1,6 @@
 <script>
-	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
+import { goto } from '$app/navigation';
 	import { githubToken, githubRepo, isConnected } from '$lib/stores.js';
 	import { fetchGallery } from '$lib/gallery.js';
 	import { createClient, parseRepo } from '$lib/github.js';
@@ -93,6 +94,15 @@
 			else previewIndex = nextIndex;
 		}, slides[previewIndex]?.delay || defaultDelay);
 	}
+
+	// Clean up interval on component destroy to prevent memory leaks
+	// and stale state mutations after navigation away.
+	onDestroy(() => {
+		if (playInterval) {
+			clearInterval(playInterval);
+			playInterval = null;
+		}
+	});
 
 	function stopPlay() {
 		isPlaying = false;
