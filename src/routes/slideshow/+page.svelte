@@ -88,18 +88,29 @@ import { goto } from '$app/navigation';
 		if (slides.length === 0) return;
 		isPlaying = true;
 		previewIndex = 0;
-		playInterval = setInterval(() => {
-			const nextIndex = (previewIndex + 1) % slides.length;
-			if (nextIndex === 0) stopPlay(); // Stop after one loop
-			else previewIndex = nextIndex;
-		}, slides[previewIndex]?.delay || defaultDelay);
+		scheduleNext();
 	}
 
-	// Clean up interval on component destroy to prevent memory leaks
+	/** Recursive setTimeout that reads the current slide's delay on every tick. */
+	function scheduleNext() {
+		if (!isPlaying) return;
+		const delay = slides[previewIndex]?.delay ?? defaultDelay;
+		playInterval = setTimeout(() => {
+			if (!isPlaying) return;
+			const nextIndex = (previewIndex + 1) % slides.length;
+			if (nextIndex === 0) stopPlay(); // Stop after one loop
+			else {
+				previewIndex = nextIndex;
+				scheduleNext();
+			}
+		}, delay);
+	}
+
+	// Clean up timeout on component destroy to prevent memory leaks
 	// and stale state mutations after navigation away.
 	onDestroy(() => {
 		if (playInterval) {
-			clearInterval(playInterval);
+			clearTimeout(playInterval);
 			playInterval = null;
 		}
 	});
@@ -107,7 +118,7 @@ import { goto } from '$app/navigation';
 	function stopPlay() {
 		isPlaying = false;
 		if (playInterval) {
-			clearInterval(playInterval);
+			clearTimeout(playInterval);
 			playInterval = null;
 		}
 	}
