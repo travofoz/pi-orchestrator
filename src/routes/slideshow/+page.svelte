@@ -371,18 +371,27 @@
 							{#if exportSuccess}
 								<div class="alert alert-success text-sm mb-2">{exportSuccess}</div>
 							{/if}
-							<div class="flex gap-2">
-								<button
-									class="btn btn-primary"
-									onclick={handleExport}
-									disabled={exporting || slides.length === 0}
-								>
-									{#if exporting}
-										<span class="loading loading-spinner loading-xs"></span>
-									{/if}
-									Export &amp; Upload GIF
-								</button>
-							</div>
+							{#if $isConnected}
+								<div class="flex gap-2">
+									<button
+										class="btn btn-primary"
+										onclick={handleExport}
+										disabled={exporting || slides.length === 0}
+									>
+										{#if exporting}
+											<span class="loading loading-spinner loading-xs"></span>
+										{/if}
+										Export &amp; Upload GIF
+									</button>
+								</div>
+							{:else}
+								<p class="text-sm text-base-content/50">
+									<button class="link link-primary" onclick={() => window.dispatchEvent(new CustomEvent('open-connect'))}>
+										Connect GitHub
+									</button>
+									with a token to export and upload GIFs.
+								</p>
+							{/if}
 							<p class="text-xs text-base-content/50 mt-2">
 								The GIF will be committed to /images/ and appear in your gallery.
 							</p>
