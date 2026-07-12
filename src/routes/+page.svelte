@@ -19,6 +19,7 @@
 	let uploading = $state(false);
 	let uploadError = $state('');
 	let uploadSuccess = $state('');
+	let dragOver = $state(false);
 
 	// Filter state
 	let tagFilter = $state('');
@@ -257,7 +258,10 @@
 					<div class="flex items-center justify-center w-full">
 						<label
 							for="file-upload"
-							class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-base-200"
+							class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-base-200 {dragOver ? 'border-primary bg-base-200' : ''}"
+							ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+							ondragleave={() => { dragOver = false; }}
+							ondrop={(e) => { e.preventDefault(); dragOver = false; const file = e.dataTransfer?.files?.[0]; if (file && file.type.startsWith('image/')) { uploadFile = file; uploadPreview = URL.createObjectURL(file); uploadError = ''; uploadSuccess = ''; } }}
 						>
 							<div class="flex flex-col items-center justify-center pt-5 pb-6">
 								<svg class="w-8 h-8 mb-2 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
