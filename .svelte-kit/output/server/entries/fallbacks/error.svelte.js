@@ -1,5 +1,4 @@
-import "../../chunks/internal.js";
-import { S as escape_html, p as getContext } from "../../chunks/server.js";
+import { f as getContext, m as escape_html } from "../../chunks/internal.js";
 import { t as stores } from "../../chunks/client.js";
 stores.updated.check;
 //#endregion

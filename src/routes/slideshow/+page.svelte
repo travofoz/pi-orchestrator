@@ -1,6 +1,6 @@
 <script>
 	import { goto } from '$app/navigation';
-	import { githubToken, githubRepo } from '$lib/stores.js';
+	import { githubToken, githubRepo, isConnected } from '$lib/stores.js';
 	import { fetchGallery } from '$lib/gallery.js';
 	import { createClient, parseRepo } from '$lib/github.js';
 	import { encodeGIF, estimateGifSize, exportAndCommitGIF } from '$lib/gif-export.js';
@@ -346,6 +346,15 @@
 								<button class="btn btn-sm" onclick={() => { if (previewIndex < slides.length - 1) previewIndex++; }} disabled={previewIndex === slides.length - 1 || isPlaying}>
 									Next ▶
 								</button>
+								{#if $isConnected}
+									<button
+										class="btn btn-sm btn-outline"
+										onclick={() => goto(`/annotate/${slides[previewIndex].entry.id}`)}
+										disabled={isPlaying}
+									>
+										Edit Annotations
+									</button>
+								{/if}
 							</div>
 						</div>
 					</div>

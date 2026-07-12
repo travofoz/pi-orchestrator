@@ -1,6 +1,5 @@
-import { S as escape_html, l as html, n as derived, o as stringify, r as ensure_array_like, s as unsubscribe_stores, t as attr_style, x as attr } from "../../chunks/server.js";
-import "../../chunks/stores.js";
-import "../../chunks/navigation.js";
+import { a as attr_style, c as store_get, d as html, i as attr_class, l as stringify, m as escape_html, o as derived, p as attr, s as ensure_array_like, u as unsubscribe_stores } from "../../chunks/internal.js";
+import { n as isConnected } from "../../chunks/stores.js";
 //#region src/lib/gallery.js
 /**
 * Filter gallery entries by tag (case-insensitive) and/or search text (in caption/id/tags).
@@ -61,7 +60,8 @@ function renderAnnotationsSVG(annotations, imageWidth, imageHeight) {
 * @returns {string}
 */
 function renderShapeSVG(shape) {
-	const style = `stroke="${shape.strokeColor || DEFAULT_STYLES.strokeColor}" stroke-width="${shape.strokeWidth || DEFAULT_STYLES.strokeWidth}" fill="${isTransparent(shape.fillColor) ? "none" : shape.fillColor}" opacity="${shape.opacity ?? DEFAULT_STYLES.opacity}"`;
+	const stroke = shape.strokeColor || DEFAULT_STYLES.strokeColor;
+	const style = `stroke="${stroke}" stroke-width="${shape.strokeWidth || DEFAULT_STYLES.strokeWidth}" fill="${isTransparent(shape.fillColor) ? shape.type === "text" ? stroke : "none" : shape.fillColor}" opacity="${shape.opacity ?? DEFAULT_STYLES.opacity}"`;
 	switch (shape.type) {
 		case "rect": return `<rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" ${style} />`;
 		case "arrow": {
@@ -131,10 +131,18 @@ function _page($$renderer, $$props) {
 			if (!entry.annotations || !Array.isArray(entry.annotations) || entry.annotations.length === 0) return "";
 			return renderAnnotationsSVG(entry.annotations, entry.width, entry.height);
 		}
-		$$renderer.push(`<div class="space-y-6"><div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"><h2 class="text-2xl font-bold">Gallery</h2> <div class="flex gap-2"><a href="/slideshow" class="btn btn-primary btn-sm">Create GIF</a> <button class="btn btn-ghost btn-sm">Refresh</button></div></div> <div class="collapse collapse-arrow bg-base-100 border border-base-300"><input type="checkbox"/> <div class="collapse-title font-medium">Upload Image</div> <div class="collapse-content">`);
-		$$renderer.push("<!--[0-->");
-		$$renderer.push(`<div class="flex items-center justify-center w-full"><label for="file-upload" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-base-200"><div class="flex flex-col items-center justify-center pt-5 pb-6"><svg class="w-8 h-8 mb-2 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg> <p class="mb-2 text-sm text-base-content/50"><span class="font-semibold">Click to select</span> or drag and drop</p> <p class="text-xs text-base-content/40">PNG, JPG, JPEG, GIF, WebP</p></div> <input id="file-upload" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden"/></label></div>`);
-		$$renderer.push(`<!--]--></div></div> `);
+		$$renderer.push(`<div class="space-y-6"><div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"><h2 class="text-2xl font-bold">Gallery</h2> <div class="flex gap-2"><button class="btn btn-primary btn-sm">Create GIF</button> <button class="btn btn-ghost btn-sm">Refresh</button></div></div> `);
+		if (store_get($$store_subs ??= {}, "$isConnected", isConnected)) {
+			$$renderer.push("<!--[0-->");
+			$$renderer.push(`<div class="collapse collapse-arrow bg-base-100 border border-base-300"><input type="checkbox"/> <div class="collapse-title font-medium">Upload Image</div> <div class="collapse-content">`);
+			$$renderer.push("<!--[0-->");
+			$$renderer.push(`<div class="flex items-center justify-center w-full"><label for="file-upload"${attr_class(`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-base-200 `)}><div class="flex flex-col items-center justify-center pt-5 pb-6"><svg class="w-8 h-8 mb-2 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg> <p class="mb-2 text-sm text-base-content/50"><span class="font-semibold">Click to select</span> or drag and drop</p> <p class="text-xs text-base-content/40">PNG, JPG, JPEG, GIF, WebP</p></div> <input id="file-upload" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden"/></label></div>`);
+			$$renderer.push(`<!--]--></div></div>`);
+		} else {
+			$$renderer.push("<!--[-1-->");
+			$$renderer.push(`<div class="alert bg-base-100 border border-base-300 text-sm"><span><button class="link link-primary">Connect GitHub</button> to upload images, add annotations, and manage your gallery.</span></div>`);
+		}
+		$$renderer.push(`<!--]--> `);
 		$$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]--> <div class="flex flex-col sm:flex-row gap-3"><div class="flex-1"><input type="text"${attr("value", searchQuery)} placeholder="Search by caption, id, or tag..." class="input input-bordered input-sm w-full"/></div> <div class="w-full sm:w-48">`);
 		$$renderer.select({
@@ -183,7 +191,17 @@ function _page($$renderer, $$props) {
 					}
 					$$renderer.push(`<!--]--></div>`);
 				} else $$renderer.push("<!--[-1-->");
-				$$renderer.push(`<!--]--> <div class="flex gap-1 mt-2 flex-wrap"><button class="btn btn-ghost btn-xs">${escape_html(copiedId === entry.rawUrl ? "Copied!" : "Copy Link")}</button> <button class="btn btn-ghost btn-xs">Annotate</button> <button class="btn btn-ghost btn-xs">View</button> <button class="btn btn-ghost btn-xs text-error"${attr("disabled", deletingId === entry.id, true)}>${escape_html(deletingId === entry.id ? "Deleting…" : "Delete")}</button></div></div></div>`);
+				$$renderer.push(`<!--]--> <div class="flex gap-1 mt-2 flex-wrap"><button class="btn btn-ghost btn-xs">${escape_html(copiedId === entry.rawUrl ? "Copied!" : "Copy Link")}</button> `);
+				if (store_get($$store_subs ??= {}, "$isConnected", isConnected)) {
+					$$renderer.push("<!--[0-->");
+					$$renderer.push(`<button class="btn btn-ghost btn-xs">Annotate</button>`);
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> <button class="btn btn-ghost btn-xs">View</button> `);
+				if (store_get($$store_subs ??= {}, "$isConnected", isConnected)) {
+					$$renderer.push("<!--[0-->");
+					$$renderer.push(`<button class="btn btn-ghost btn-xs text-error"${attr("disabled", deletingId === entry.id, true)}>${escape_html(deletingId === entry.id ? "Deleting…" : "Delete")}</button>`);
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--></div></div></div>`);
 			}
 			$$renderer.push(`<!--]--></div>`);
 		}

@@ -1,6 +1,6 @@
 <script>
 	import { goto } from '$app/navigation';
-	import { githubToken, githubRepo } from '$lib/stores.js';
+	import { githubToken, githubRepo, isConnected } from '$lib/stores.js';
 	import { fetchGallery, filterGallery, deleteEntry } from '$lib/gallery.js';
 	import { uploadImage } from '$lib/upload.js';
 	import { createClient, parseRepo, putFile, getDefaultBranch } from '$lib/github.js';

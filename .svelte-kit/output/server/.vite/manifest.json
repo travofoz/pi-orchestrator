@@ -16,9 +16,7 @@
       "_internal.js",
       "_shared.js",
       "_internal2.js",
-      "_exports.js",
-      "_server.js",
-      "_index-server.js"
+      "_exports.js"
     ]
   },
   "_env.js": {
@@ -27,37 +25,21 @@
   },
   "_exports.js": {
     "file": "chunks/exports.js",
-    "name": "exports"
-  },
-  "_index-server.js": {
-    "file": "chunks/index-server.js",
-    "name": "index-server",
+    "name": "exports",
     "imports": [
-      "_server.js"
+      "_internal.js"
     ]
   },
   "_internal.js": {
     "file": "chunks/internal.js",
     "name": "internal",
     "imports": [
-      "_internal2.js",
-      "_server.js"
+      "_internal2.js"
     ]
   },
   "_internal2.js": {
     "file": "chunks/internal2.js",
     "name": "internal"
-  },
-  "_navigation.js": {
-    "file": "chunks/navigation.js",
-    "name": "navigation",
-    "imports": [
-      "_client.js"
-    ]
-  },
-  "_server.js": {
-    "file": "chunks/server.js",
-    "name": "server"
   },
   "_shared.js": {
     "file": "chunks/shared.js",
@@ -67,8 +49,9 @@
     "file": "chunks/stores.js",
     "name": "stores",
     "imports": [
-      "_server.js",
-      "_index-server.js"
+      "_internal.js",
+      "_exports.js",
+      "_client.js"
     ]
   },
   "_utils.js": {
@@ -96,7 +79,6 @@
     "isEntry": true,
     "imports": [
       "_internal.js",
-      "_server.js",
       "_client.js"
     ]
   },
@@ -111,8 +93,6 @@
       "_internal2.js",
       "_utils.js",
       "_exports.js",
-      "_server.js",
-      "_index-server.js",
       "_env.js"
     ]
   },
@@ -128,11 +108,11 @@
     "src": "src/routes/+layout.svelte",
     "isEntry": true,
     "imports": [
-      "_server.js",
+      "_internal.js",
       "_stores.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.Bh504rkw.css"
+      "_app/immutable/assets/_layout.cbgED7oc.css"
     ]
   },
   "src/routes/+page.svelte": {
@@ -141,9 +121,8 @@
     "src": "src/routes/+page.svelte",
     "isEntry": true,
     "imports": [
-      "_server.js",
-      "_stores.js",
-      "_navigation.js"
+      "_internal.js",
+      "_stores.js"
     ]
   },
   "src/routes/annotate/[id]/+page.js": {
@@ -159,10 +138,8 @@
     "isEntry": true,
     "imports": [
       "_internal.js",
-      "_server.js",
-      "_stores.js",
       "_client.js",
-      "_navigation.js"
+      "_stores.js"
     ]
   },
   "src/routes/slideshow/+page.js": {
@@ -177,9 +154,8 @@
     "src": "src/routes/slideshow/+page.svelte",
     "isEntry": true,
     "imports": [
-      "_server.js",
-      "_stores.js",
-      "_navigation.js"
+      "_internal.js",
+      "_stores.js"
     ]
   },
   "virtual:__sveltekit/env": {
