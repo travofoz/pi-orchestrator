@@ -44,6 +44,9 @@
 		if (readonly) return;
 		const { x, y } = getCoords(e);
 
+		// Dismiss text input popup when starting any canvas interaction
+		showTextInput = false;
+
 		if (activeTool === 'text') {
 			// Place text at click position
 			textInputPos = { x, y };
@@ -185,27 +188,27 @@
 		<div class="flex flex-wrap items-center gap-2 p-2 bg-base-200 rounded-lg">
 			<button
 				class="btn btn-sm {activeTool === 'select' ? 'btn-primary' : 'btn-ghost'}"
-				onclick={() => (activeTool = 'select')}
+				onclick={() => { activeTool = 'select'; showTextInput = false; }}
 				title="Select / Move"
 			>↖</button>
 			<button
 				class="btn btn-sm {activeTool === 'rect' ? 'btn-primary' : 'btn-ghost'}"
-				onclick={() => (activeTool = 'rect')}
+				onclick={() => { activeTool = 'rect'; showTextInput = false; }}
 				title="Rectangle"
 			>□</button>
 			<button
 				class="btn btn-sm {activeTool === 'arrow' ? 'btn-primary' : 'btn-ghost'}"
-				onclick={() => (activeTool = 'arrow')}
+				onclick={() => { activeTool = 'arrow'; showTextInput = false; }}
 				title="Arrow"
 			>→</button>
 			<button
 				class="btn btn-sm {activeTool === 'text' ? 'btn-primary' : 'btn-ghost'}"
-				onclick={() => (activeTool = 'text')}
+				onclick={() => { activeTool = 'text'; showTextInput = false; }}
 				title="Text"
 			>T</button>
 			<button
 				class="btn btn-sm {activeTool === 'freehand' ? 'btn-primary' : 'btn-ghost'}"
-				onclick={() => (activeTool = 'freehand')}
+				onclick={() => { activeTool = 'freehand'; showTextInput = false; }}
 				title="Freehand"
 			>✎</button>
 
