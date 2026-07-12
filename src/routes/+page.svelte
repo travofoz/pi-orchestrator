@@ -172,9 +172,9 @@
 	<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
 		<h2 class="text-2xl font-bold">Gallery</h2>
 		<div class="flex gap-2">
-			<a href="/slideshow" class="btn btn-primary btn-sm">
+			<button class="btn btn-primary btn-sm" onclick={() => goto('/slideshow')}>
 				Create GIF
-			</a>
+			</button>
 			<button class="btn btn-ghost btn-sm" onclick={loadGallery}>
 				Refresh
 			</button>

@@ -103,6 +103,7 @@ function _page($$renderer, $$props) {
 		let tagFilter = "";
 		let searchQuery = "";
 		let copiedId = "";
+		let deletingId = "";
 		let allTags = derived(() => [...new Set(entries.flatMap((e) => e.tags))].sort());
 		let filteredEntries = derived(() => filterGallery(entries, {
 			tagFilter: void 0,
@@ -182,10 +183,12 @@ function _page($$renderer, $$props) {
 					}
 					$$renderer.push(`<!--]--></div>`);
 				} else $$renderer.push("<!--[-1-->");
-				$$renderer.push(`<!--]--> <div class="flex gap-1 mt-2 flex-wrap"><button class="btn btn-ghost btn-xs">${escape_html(copiedId === entry.rawUrl ? "Copied!" : "Copy Link")}</button> <button class="btn btn-ghost btn-xs">Annotate</button> <button class="btn btn-ghost btn-xs">View</button></div></div></div>`);
+				$$renderer.push(`<!--]--> <div class="flex gap-1 mt-2 flex-wrap"><button class="btn btn-ghost btn-xs">${escape_html(copiedId === entry.rawUrl ? "Copied!" : "Copy Link")}</button> <button class="btn btn-ghost btn-xs">Annotate</button> <button class="btn btn-ghost btn-xs">View</button> <button class="btn btn-ghost btn-xs text-error"${attr("disabled", deletingId === entry.id, true)}>${escape_html(deletingId === entry.id ? "Deleting…" : "Delete")}</button></div></div></div>`);
 			}
 			$$renderer.push(`<!--]--></div>`);
 		}
+		$$renderer.push(`<!--]--> `);
+		$$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]--></div> `);
 		$$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]-->`);

@@ -1,5 +1,6 @@
 <script>
 	import '../app.css';
+	import { goto } from '$app/navigation';
 	import { githubToken, githubRepo, isConnected } from '$lib/stores.js';
 
 	/** @type {import('svelte').Snippet} */
@@ -43,7 +44,7 @@
 	<!-- Navbar -->
 	<div class="navbar bg-base-100 shadow-sm px-4">
 		<div class="flex-1">
-			<a href="/" class="text-xl font-bold">Emmy</a>
+			<button class="text-xl font-bold cursor-pointer" onclick={() => goto('/')}>Emmy</button>
 		</div>
 		<div class="flex-none gap-2">
 			{#if $isConnected}

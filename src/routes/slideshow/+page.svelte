@@ -181,7 +181,7 @@
 	<!-- Header -->
 	<div class="flex items-center justify-between">
 		<div class="flex items-center gap-3">
-			<a href="/" class="btn btn-ghost btn-sm">← Back</a>
+			<button class="btn btn-ghost btn-sm" onclick={() => goto('/')}>← Back</button>
 			<h2 class="text-2xl font-bold">Slideshow Builder</h2>
 		</div>
 	</div>
