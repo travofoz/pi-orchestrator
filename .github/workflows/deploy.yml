@@ -6,7 +6,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
   # Allow manual trigger from Actions tab
   workflow_dispatch:
 
