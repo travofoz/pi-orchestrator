@@ -167,6 +167,10 @@
 
 	// Keyboard shortcut: Delete selected shape
 	function handleKeydown(e) {
+		// Don't delete shapes when user is typing in an input or textarea
+		const tag = /** @type {Element} */ (e.target).tagName;
+		if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
 		if (e.key === 'Delete' || e.key === 'Backspace') {
 			deleteSelected();
 		}
