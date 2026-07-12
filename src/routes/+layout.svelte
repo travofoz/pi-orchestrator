@@ -117,51 +117,53 @@
 				<div class="alert alert-error text-sm mb-3">{connectError}</div>
 			{/if}
 
-			<div class="form-control mb-3">
-				<label class="label" for="gh-repo-input">
-					<span class="label-text">Repository (owner/repo)</span>
-				</label>
-				<input
-					id="gh-repo-input"
-					type="text"
-					bind:value={repoInput}
-					placeholder="your-username/emmy"
-					class="input input-bordered w-full"
-				/>
-				<label class="label">
-					<span class="label-text-alt text-base-content/60">Required. The public repo to browse.</span>
-				</label>
-			</div>
+			<form onsubmit={saveConnect}>
+				<div class="form-control mb-3">
+					<label class="label" for="gh-repo-input">
+						<span class="label-text">Repository (owner/repo)</span>
+					</label>
+					<input
+						id="gh-repo-input"
+						type="text"
+						bind:value={repoInput}
+						placeholder="your-username/emmy"
+						class="input input-bordered w-full"
+					/>
+					<label class="label">
+						<span class="label-text-alt text-base-content/60">Required. The public repo to browse.</span>
+					</label>
+				</div>
 
-			<div class="form-control mb-4">
-				<label class="label" for="gh-token-input">
-					<span class="label-text">GitHub Token <span class="text-base-content/50">(optional for read-only)</span></span>
-				</label>
-				<input
-					id="gh-token-input"
-					type="password"
-					bind:value={tokenInput}
-					placeholder="ghp_... or leave blank to browse"
-					class="input input-bordered w-full"
-				/>
-				<label class="label">
-					<span class="label-text-alt">
-						<a
-							href="https://github.com/settings/tokens/new?scopes=repo&description=Emmy"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="link link-primary text-xs"
-						>
-							Generate a token on GitHub (opens new tab) →
-						</a>
-					</span>
-				</label>
-			</div>
+				<div class="form-control mb-4">
+					<label class="label" for="gh-token-input">
+						<span class="label-text">GitHub Token <span class="text-base-content/50">(optional for read-only)</span></span>
+					</label>
+					<input
+						id="gh-token-input"
+						type="password"
+						bind:value={tokenInput}
+						placeholder="ghp_... or leave blank to browse"
+						class="input input-bordered w-full"
+					/>
+					<label class="label">
+						<span class="label-text-alt">
+							<a
+								href="https://github.com/settings/tokens/new?scopes=repo&description=Emmy"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="link link-primary text-xs"
+							>
+								Generate a token on GitHub (opens new tab) →
+							</a>
+						</span>
+					</label>
+				</div>
 
-			<div class="modal-action">
-				<button type="button" class="btn btn-ghost" onclick={() => (showConnectModal = false)}>Cancel</button>
-				<button type="button" class="btn btn-primary" onclick={saveConnect}>Connect</button>
-			</div>
+				<div class="modal-action">
+					<button type="button" class="btn btn-ghost" onclick={() => (showConnectModal = false)}>Cancel</button>
+					<button type="submit" class="btn btn-primary">Connect</button>
+				</div>
+			</form>
 		</div>
 	</div>
 {/if}
