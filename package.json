@@ -1,0 +1,23 @@
+{
+  "name": "emmy",
+  "version": "1.0.0",
+  "description": "Personal lightweight image-hosting and sharing tool on GitHub infrastructure",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.69.2",
+    "@tailwindcss/vite": "^4.3.2",
+    "daisyui": "^5.6.17",
+    "octokit": "^5.0.5",
+    "svelte": "^5.56.4",
+    "tailwindcss": "^4.3.2",
+    "vite": "^8.1.4"
+  }
+}
