@@ -1,0 +1,6 @@
+id: no-console-log
+message: console.log should not be in production code
+severity: error
+language: JavaScript
+rule:
+  pattern: console.log($$$)

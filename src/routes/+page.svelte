@@ -1,4 +1,5 @@
 <script>
+	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { githubToken, githubRepo, isConnected } from '$lib/stores.js';
 	import { fetchGallery, filterGallery, deleteEntry } from '$lib/gallery.js';
@@ -39,6 +40,11 @@
 	// Delete state
 	let deletingId = $state('');
 	let deleteError = $state('');
+	let destroyed = $state(false);
+
+	onDestroy(() => {
+		destroyed = true;
+	});
 
 	async function handleDelete(id, ext) {
 		if (!confirm(`Delete ${id}? This cannot be undone.`)) return;
@@ -65,11 +71,14 @@
 		loading = true;
 		error = '';
 		try {
-			entries = await fetchGallery($githubToken, $githubRepo);
+			const result = await fetchGallery($githubToken, $githubRepo);
+			if (!destroyed) entries = result;
 		} catch (err) {
-			error = err.message || 'Failed to load gallery';
+			if (!destroyed) {
+				error = err.message || 'Failed to load gallery';
+			}
 		} finally {
-			loading = false;
+			if (!destroyed) loading = false;
 		}
 	}
 
@@ -114,8 +123,9 @@
 			}
 
 			const result = await uploadImage(octokit, parsed.owner, parsed.repo, uploadFile, { tags, caption: uploadCaption.trim() });
-			uploadSuccess = `Uploaded: ${result.id}`;
+			const successMsg = `Uploaded: ${result.id}`;
 			clearUpload();
+			uploadSuccess = successMsg;
 			await loadGallery();
 		} catch (err) {
 			uploadError = err.message || 'Upload failed';

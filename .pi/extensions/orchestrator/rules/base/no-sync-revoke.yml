@@ -1,0 +1,12 @@
+id: no-sync-revoke
+message: URL.revokeObjectURL should not be called synchronously after a.click()
+severity: error
+language: JavaScript
+rule:
+  pattern: |-
+    URL.revokeObjectURL($URL)
+  inside:
+    stopBy: end
+    follows:
+      pattern: |-
+        a.click()

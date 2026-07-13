@@ -1,4 +1,4 @@
-import { a as attr_class, c as ensure_array_like, d as unsubscribe_stores, f as html, h as escape_html, l as store_get, m as attr, o as attr_style, s as derived, u as stringify } from "../../chunks/internal.js";
+import { a as attr_class, c as ensure_array_like, d as unsubscribe_stores, f as html, h as escape_html, i as onDestroy, l as store_get, m as attr, o as attr_style, s as derived, u as stringify } from "../../chunks/internal.js";
 import { r as isConnected } from "../../chunks/stores.js";
 //#region src/lib/gallery.js
 /**
@@ -158,6 +158,7 @@ function _page($$renderer, $$props) {
 		let searchQuery = "";
 		let copiedId = "";
 		let deletingId = "";
+		onDestroy(() => {});
 		let allTags = derived(() => [...new Set(entries.flatMap((e) => e.tags))].sort());
 		let filteredEntries = derived(() => filterGallery(entries, {
 			tagFilter: void 0,

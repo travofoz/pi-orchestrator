@@ -34,6 +34,11 @@ import { goto } from '$app/navigation';
 
 	// Selected entry in the "add" dropdown
 	let selectedEntryId = $state('');
+	let destroyed = $state(false);
+
+	onDestroy(() => {
+		destroyed = true;
+	});
 
 	$effect(() => {
 		if ($githubRepo) {
@@ -45,11 +50,12 @@ import { goto } from '$app/navigation';
 		loading = true;
 		error = '';
 		try {
-			allEntries = await fetchGallery($githubToken, $githubRepo);
+			const result = await fetchGallery($githubToken, $githubRepo);
+			if (!destroyed) allEntries = result;
 		} catch (err) {
-			error = err.message || 'Failed to load gallery';
+			if (!destroyed) error = err.message || 'Failed to load gallery';
 		} finally {
-			loading = false;
+			if (!destroyed) loading = false;
 		}
 	}
 
@@ -173,11 +179,12 @@ import { goto } from '$app/navigation';
 			exportSuccess = `GIF exported: ${result.gifUrl}`;
 
 			// Offer download too
+			const url = URL.createObjectURL(result.blob);
 			const a = document.createElement('a');
-			a.href = URL.createObjectURL(result.blob);
+			a.href = url;
 			a.download = `${result.id}.gif`;
 			a.click();
-			URL.revokeObjectURL(a.href);
+			setTimeout(() => URL.revokeObjectURL(url), 10000);
 		} catch (err) {
 			exportError = err.message || 'Export failed';
 		} finally {

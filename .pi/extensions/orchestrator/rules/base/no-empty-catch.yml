@@ -1,0 +1,8 @@
+id: no-empty-catch
+message: Empty catch block swallows errors
+severity: error
+language: JavaScript
+rule:
+  any:
+    - pattern: "catch($$$) {}"
+    - pattern: "catch {}"

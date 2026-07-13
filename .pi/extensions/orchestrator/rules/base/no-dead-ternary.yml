@@ -1,0 +1,6 @@
+id: no-dead-ternary
+message: Ternary with identical branches - dead code
+severity: error
+language: JavaScript
+rule:
+  pattern: "$X ? $A : $A"

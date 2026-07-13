@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import AnnotationEditor from '$lib/components/AnnotationEditor.svelte';
+	import { onDestroy } from 'svelte';
 	import { githubToken, githubRepo } from '$lib/stores.js';
 	import { createClient, parseRepo, getFile, putFile, getDefaultBranch, rawFileUrl } from '$lib/github.js';
 
@@ -18,6 +19,11 @@
 	let shapes = $state([]);
 
 	let imageUrl = $state('');
+	let destroyed = $state(false);
+
+	onDestroy(() => {
+		destroyed = true;
+	});
 
 	$effect(() => {
 		if (id && $githubToken && $githubRepo) {
@@ -32,7 +38,7 @@
 			const octokit = createClient($githubToken);
 			const parsed = parseRepo($githubRepo);
 			if (!octokit || !parsed) {
-				error = 'GitHub not connected.';
+				if (!destroyed) error = 'GitHub not connected.';
 				return;
 			}
 
@@ -43,29 +49,31 @@
 			const jsonPath = `images/${id}.json`;
 			const result = await getFile(octokit, owner, repo, jsonPath);
 			if (!result) {
-				error = `Metadata not found for ${id}`;
+				if (!destroyed) error = `Metadata not found for ${id}`;
 				return;
 			}
 
 			const data = JSON.parse(result.content);
-			entry = {
-				...data,
-				jsonPath,
-				imagePath: `images/${data.filename}`,
-				rawUrl: rawFileUrl(owner, repo, branch, `images/${data.filename}`),
-				_sha: result.sha // store sha for updating
-			};
+			if (!destroyed) {
+				entry = {
+					...data,
+					jsonPath,
+					imagePath: `images/${data.filename}`,
+					rawUrl: rawFileUrl(owner, repo, branch, `images/${data.filename}`),
+					_sha: result.sha // store sha for updating
+				};
 
-			imageUrl = entry.rawUrl;
+				imageUrl = entry.rawUrl;
 
-			// Load annotations
-			if (data.annotations && Array.isArray(data.annotations)) {
-				shapes = data.annotations;
+				// Load annotations
+				if (data.annotations && Array.isArray(data.annotations)) {
+					shapes = data.annotations;
+				}
 			}
 		} catch (err) {
-			error = err.message || 'Failed to load image';
+			if (!destroyed) error = err.message || 'Failed to load image';
 		} finally {
-			loading = false;
+			if (!destroyed) loading = false;
 		}
 	}
 

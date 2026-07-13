@@ -1,0 +1,6 @@
+id: no-debugger
+message: debugger statement found in production code
+severity: error
+language: JavaScript
+rule:
+  pattern: debugger

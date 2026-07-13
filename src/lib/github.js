@@ -183,7 +183,8 @@ export async function deleteFile(octokit, owner, repo, path, sha, message) {
  * @returns {string}
  */
 export function rawFileUrl(owner, repo, branch, path) {
-	return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(branch)}/${encodeURIComponent(path)}`;
+	const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+	return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(branch)}/${encodedPath}`;
 }
 
 /**

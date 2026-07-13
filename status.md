@@ -116,3 +116,5 @@
 [AUDIT_SUB_ISSUES] 10:14:23 PM || BASELINE_REVIEW: at least one of 2 independent samples flagged a problem — sub-audit fails on dissent.
 [AUDIT_FAIL] 10:14:23 PM || Critic rejected workspace state. Error threshold: 4/3
 [CIRCUIT_BREAKER] 10:14:23 PM || Max remediation cycles reached for 1_spec. Halting pipeline for safety.
+[CHECKPOINT] 10:14:23 PM || git commit: phase halted (max remediations): 1_spec
+[CHECKPOINT_PUSH_WARN] 10:14:26 PM || git push failed or no remote configured — commit is local-only.

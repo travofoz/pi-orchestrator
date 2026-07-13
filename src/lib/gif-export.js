@@ -253,7 +253,6 @@ export async function encodeGIF(slides, options = {}) {
 	// per frame which is simpler and works well for screenshots.
 
 	const encoder = GIFEncoder({ auto: true });
-	let isFirst = true;
 
 	for (let i = 0; i < slides.length; i++) {
 		const slide = slides[i];
@@ -272,14 +271,14 @@ export async function encodeGIF(slides, options = {}) {
 
 		// Write frame
 		encoder.writeFrame(indexData, width, height, {
-			palette: isFirst ? palette : palette, // Always provide palette for local color table
+			palette, // Always provide palette for local color table
 			delay: slide.delay,
 			repeat,
 			transparent: false,
 			dispose: 1 // Clear to background before drawing next frame
 		});
 
-		isFirst = false;
+
 	}
 
 	encoder.finish();

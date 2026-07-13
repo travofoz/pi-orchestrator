@@ -1,0 +1,13 @@
+Emmy is a personal, single-user, lightweight image-hosting and sharing tool that replaces Imgur for one person's workflow. It runs entirely on GitHub as infrastructure: a public GitHub repo is the database, GitHub Pages is the host, and the GitHub REST API (via Octokit.js) is the only backend. There is no server, no database, no multi-tenancy, no user accounts beyond the owner's GitHub account. Everything uploaded is intentionally public (the owner already has Google Photos for private storage) — there is no public/private toggle and never will be. The GitHub PAT is only needed for write actions; browsing the gallery requires no auth.
+
+Technical constraints: JavaScript + JSDoc only (no TypeScript ever). Stack is SvelteKit + Vite, static adapter, DaisyUI on Tailwind, Octokit.js for all GitHub API calls. Fully client-side — no backend server, no database beyond the git repo, no serverless functions in v1. Auth persistence: PAT stored in localStorage indefinitely (one-and-done), with documented XSS tradeoff.
+
+Data model: one image = one committed image file + one JSON metadata file, same base name, committed together under /images/. JSON metadata is flat: id, filename, type (image|gif), createdAt, tags, caption, width, height, annotations (SVG overlay JSON or null), sourceSlideIds (GIF entries only, lists source image ids in order). JSON-per-image gives free rollback via git history; do not collapse into a monolithic gallery.json.
+
+Explicitly out of scope (do not build): AI-powered tagging/captioning/search (rejected by design, not deferred); comments with visitor identity (would need serverless function; if ever wanted, use giscus); per-image OG preview pages; any multi-user or permissions system; any private/public toggle.
+
+Operational caveats: GitHub Pages requires a public repo — everything uploaded is public by design. Bandwidth/abuse risk exists but is a personal/moderate-traffic tool, not a CDN. Recommend the user run this under a separate GitHub account or org from their primary one (README note, not code).
+
+Origin: The idea came from a half-asleep state captured by voice dictation before composition could filter it. The discipline worth keeping is reaching for voice before anything that forces composition when a half-formed idea shows up.
+
+Build guidance: Keep each phase's diff reviewable. Don't refactor earlier phases while implementing later ones unless something is broken. Favor small composable modules (src/lib/github.js, src/lib/gif-export.js, src/lib/annotations.js, etc.) for legibility across agent sessions. For design decisions not covered here, make the simplest choice consistent with constraints, note it in a code comment, and move on.

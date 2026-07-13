@@ -1,0 +1,11 @@
+id: no-hardcoded-branch
+message: Hardcoded branch name found - use getDefaultBranch() instead
+severity: error
+language: JavaScript
+rule:
+  any:
+    - pattern: '"main"'
+    - pattern: '"master"'
+  not:
+    inside:
+      kind: export_statement
