@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi-bake — autonomous phase execution</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #c0c0d0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 2rem;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .container { max-width: 720px; width: 100%; }
+
+  /* ─═══ header ═══─ */
+  .header {
+    text-align: center;
+    margin: 3rem 0 2rem;
+  }
+  .logo {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: #ff2080;
+    text-shadow: 0 0 20px rgba(255,32,128,.4);
+  }
+  .logo .dim { color: #605868; }
+  .sub {
+    color: #9088a0;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+  }
+  .sub a { color: #ff2080; text-decoration: none; }
+  .sub a:hover { text-decoration: underline; }
+
+  /* ─═══ rule ═══─ */
+  .rule {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #ff208066, #00ffc866, transparent);
+    margin: 2rem 0;
+  }
+
+  /* ─═══ sections ═══─ */
+  h2 {
+    color: #00ffc8;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin: 2rem 0 1rem;
+  }
+  h2::before { content: '──═[ '; color: #605868; }
+  h2::after  { content: ' ]═──'; color: #605868; }
+
+  p { margin: 0.75rem 0; color: #b0a8c0; }
+
+  /* ─═══ pipeline ═══─ */
+  .pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin: 1.5rem 0;
+  }
+  .pipe-step {
+    background: #14141e;
+    border: 1px solid #2a2a3a;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+    color: #9088a0;
+  }
+  .pipe-step.active { color: #ff2080; border-color: #ff208066; }
+  .pipe-arrow { color: #605868; font-size: 0.75rem; align-self: center; }
+
+  /* ─═══ commands table ═══─ */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.8rem;
+  }
+  th {
+    text-align: left;
+    color: #605868;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #2a2a3a;
+    font-weight: 400;
+  }
+  td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid #1a1a24;
+    vertical-align: top;
+  }
+  td:first-child { color: #ff2080; white-space: nowrap; }
+  td:last-child  { color: #b0a8c0; }
+
+  /* ─═══ badge row ═══─ */
+  .badges {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 1.5rem 0;
+  }
+  .badges img { height: 20px; }
+
+  /* ─═══ footer ═══─ */
+  .footer {
+    text-align: center;
+    color: #605868;
+    font-size: 0.7rem;
+    margin: 3rem 0 1rem;
+    letter-spacing: 0.1em;
+  }
+  .footer a { color: #605868; text-decoration: none; }
+  .footer a:hover { color: #9088a0; }
+
+  @media (max-width: 600px) {
+    body { padding: 1rem; }
+    .logo { font-size: 1.6rem; }
+    .pipeline { gap: 0.25rem; }
+    td:first-child { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <div class="logo">──═<span class="dim">[</span> bake <span class="dim">]</span>═──</div>
+  <div class="sub">
+    autonomous phase execution for <a href="https://pi.dev">pi</a>
+    <br>
+    <a href="https://npmjs.com/package/@travofoz/pi-bake">npm</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/travofoz/pi-bake">github</a>
+  </div>
+</div>
+
+<hr class="rule">
+
+<h2>what it is</h2>
+<p>
+  Bake runs a spec-driven pipeline: an LLM executor builds code from phase specs,
+  then ast-grep + an LLM auditor verify the result, and remediation loops until
+  everything passes or the circuit breaker fires.
+</p>
+
+<div class="pipeline">
+  <span class="pipe-step active">executor</span>
+  <span class="pipe-arrow">→</span>
+  <span class="pipe-step active">ast-grep</span>
+  <span class="pipe-arrow">→</span>
+  <span class="pipe-step active">LLM audit</span>
+  <span class="pipe-arrow">→</span>
+  <span class="pipe-step">remediate</span>
+  <span class="pipe-arrow">→</span>
+  <span class="pipe-step">✓ / ❌</span>
+</div>
+
+<h2>install</h2>
+<p>
+  You need <a href="https://pi.dev">pi</a> and <a href="https://ast-grep.github.io/">ast-grep</a>.
+</p>
+<pre style="background:#14141e; border:1px solid #2a2a3a; padding:1rem; font-size:0.8rem; color:#00ffc8; overflow-x:auto;">pi install npm:@travofoz/pi-bake
+# or project-local:
+pi install -l npm:@travofoz/pi-bake</pre>
+
+<h2>commands</h2>
+<table>
+  <tr><th>command</th><th>does what</th></tr>
+  <tr><td>/bake-start</td><td>run or resume the pipeline</td></tr>
+  <tr><td>/bake-pause</td><td>pause after current phase</td></tr>
+  <tr><td>/bake-resume</td><td>resume a paused pipeline</td></tr>
+  <tr><td>/bake-skip</td><td>skip current phase</td></tr>
+  <tr><td>/bake-retry</td><td>retry last phase</td></tr>
+  <tr><td>/bake-steer</td><td>inject guidance for next executor run</td></tr>
+  <tr><td>/bake-status</td><td>show state + recent events</td></tr>
+  <tr><td>/bake-log</td><td>full event log</td></tr>
+  <tr><td>/bake-detail</td><td>browse phases with spec + event timeline</td></tr>
+  <tr><td>/bake-rules</td><td>toggle ast-grep rules on/off</td></tr>
+  <tr><td>/bake-reset</td><td>reset pipeline state</td></tr>
+  <tr><td>/bake-spec-decompose</td><td>decompose a raw spec into phase files</td></tr>
+  <tr><td>/bake-config</td><td>widget mode, preferences</td></tr>
+</table>
+
+<h2>philosophy</h2>
+<p>
+  Waterfall with the human problems removed. Sequential phases, deterministic
+  gates (ast-grep, ~50ms), semantic verification (LLM), fast feedback loops.
+  No meetings, no blame, no stakeholder churn. Read
+  <a href="docs/bake-philosophy.md" style="color:#ff2080;">bake-philosophy.md</a>
+  for the full rationale.
+</p>
+
+<hr class="rule">
+
+<div class="footer">
+  <a href="https://github.com/travofoz/pi-bake">travofoz/pi-bake</a>
+  &nbsp;·&nbsp; mit
+</div>
+
+</div>
+</body>
+</html>
