@@ -120,16 +120,20 @@ export function register(pi: ExtensionAPI): void {
 				c.addChild(new Text(theme.fg("toolTitle", "Spec"), 1, 0));
 				// Show scroll window from scrollOff
 				const visible = contentLines.slice(scrollOff, scrollOff + maxLines);
+				const total = contentLines.length;
 				for (const v of visible) {
 					c.addChild(new Text(theme.fg("muted", v), 0, 0));
 				}
-				// Scroll indicator
-				if (scrollOff > 0) {
-					c.addChild(new Text(theme.fg("dim", `  ▲ ${scrollOff} more above`), 1, 0));
-				}
-				if (scrollOff + maxLines < contentLines.length) {
-					const rem = contentLines.length - scrollOff - maxLines;
-					c.addChild(new Text(theme.fg("dim", `  ▼ ${rem} more below`), 1, 0));
+				// Scrollbar — compact position indicator
+				if (total > maxLines) {
+					const pct = Math.round((scrollOff / Math.max(1, total - maxLines)) * 100);
+					const barW = 16;
+					const thumb = Math.round((pct / 100) * (barW - 2));
+					const bar = "▓".repeat(Math.max(0, thumb)) + "░" + "▓".repeat(Math.max(0, barW - 2 - thumb));
+					c.addChild(new Text(
+						theme.fg("dim", `  ▐${bar}▌ ${scrollOff + 1}–${Math.min(scrollOff + maxLines, total)}/${total}`),
+						0, 0
+					));
 				}
 
 				return c;
@@ -155,7 +159,7 @@ export function register(pi: ExtensionAPI): void {
 					if (selectedIdx >= allPhases.length) selectedIdx = 0;
 
 					const makeOv = (sc: number) => {
-						const o = new Overlay(theme, { title: allPhases[selectedIdx] });
+						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: tui.rows });
 						const overH = 10;
 						const maxSpec = Math.max(3, (tui.rows || 24) - overH);
 						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec));
@@ -205,7 +209,7 @@ export function register(pi: ExtensionAPI): void {
 								const phaseName = allPhases[selectedIdx];
 								bake?.skipPhase(phaseName);
 								done(undefined);
-							} else if (data === "q" || data === "escape") {
+							} else if (data === "q" || data === "escape" || data === "\x1b") {
 								done(undefined);
 							}
 						},

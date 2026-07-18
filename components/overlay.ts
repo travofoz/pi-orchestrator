@@ -55,10 +55,12 @@ export class Overlay {
 	private title: string;
 	private body: Container;
 	private footerLines: string[];
+	private maxHeight: number;
 
-	constructor(theme: ThemeProxy, opts: { title?: string } = {}) {
+	constructor(theme: ThemeProxy, opts: { title?: string; maxHeight?: number } = {}) {
 		this.theme = theme;
 		this.title = opts.title ?? "";
+		this.maxHeight = opts.maxHeight ?? 0; // 0 = unlimited
 		this.body = new Container();
 		this.footerLines = [];
 	}
@@ -111,9 +113,16 @@ export class Overlay {
 		// ── Bottom rule ──
 		result.push(a(taper(innerW)));
 
+		// ── Cap to maxHeight if set ──
+		let capped = result;
+		if (this.maxHeight > 0 && capped.length > this.maxHeight) {
+			capped = capped.slice(0, this.maxHeight);
+			capped[capped.length - 1] = dim("  ▼ truncated");
+		}
+
 		// ── Pad with dark grey bg + margin ──
 		const leftPad = " ".repeat(margin);
-		return result.map((line) => {
+		return capped.map((line) => {
 			const vis = visibleWidth(line);
 			const rightPad = " ".repeat(Math.max(0, fullW - margin - vis - margin));
 			return wrapPanel(leftPad + line + rightPad);
