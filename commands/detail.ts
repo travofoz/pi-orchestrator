@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Container, Text, Spacer } from "@earendil-works/pi-tui";
+import { Container, Text, Spacer, wrapTextWithAnsi, visibleWidth } from "@earendil-works/pi-tui";
 import { Overlay } from "../components/overlay.ts";
 import { bakeCtx, BAKE_BASE, PHASES_DIR, getPhaseList } from "./ctx.ts";
 
@@ -52,8 +52,8 @@ export function register(pi: ExtensionAPI): void {
 				return { icon: "○", color: "dim" as const };
 			};
 
-			/** Build the content body for the selected phase — scrollable. */
-			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20) => {
+			/** Build the content body for the selected phase — scrollable, line-wrapped. */
+			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50) => {
 				const c = new Container();
 				const name = allPhases[idx];
 
@@ -101,33 +101,38 @@ export function register(pi: ExtensionAPI): void {
 					c.addChild(new Text(theme.fg("dim", "  No events yet"), 1, 0));
 				}
 
-				// ── Spec content (scrollable) ──
+				// ── Spec content (scrollable, line-wrapped) ──
 				const spec = readPhaseSpec(name);
 				const specLines = spec.split("\n").filter(Boolean);
-				// Collect all spec content lines (headings + body)
+				// Wrap each line to content width, then flatten into contentLines
 				const contentLines: string[] = [];
 				let inSection = false;
 				for (const line of specLines) {
 					if (line.startsWith("## ")) {
 						inSection = true;
-						contentLines.push(`  ${line.replace("## ", "")}`);
+						const heading = line.replace("## ", "");
+						// Wrap heading too
+						const wrapped = wrapTextWithAnsi(heading, contentW - 2);
+						for (const w of wrapped) contentLines.push(`  ${w}`);
 					} else if (inSection && line.trim()) {
-						contentLines.push(`    ${line}`);
+						const indent = contentW > 40 ? 4 : 2;
+						const wrapped = wrapTextWithAnsi(line, contentW - indent);
+						for (const w of wrapped) contentLines.push(" ".repeat(indent) + w);
 					}
 				}
 
 				c.addChild(new Spacer(1));
 				c.addChild(new Text(theme.fg("toolTitle", "Spec"), 1, 0));
 				// Show scroll window from scrollOff
-				const visible = contentLines.slice(scrollOff, scrollOff + maxLines);
 				const total = contentLines.length;
+				const visible = contentLines.slice(scrollOff, scrollOff + maxLines);
 				for (const v of visible) {
 					c.addChild(new Text(theme.fg("muted", v), 0, 0));
 				}
 				// Scrollbar — compact position indicator
 				if (total > maxLines) {
 					const pct = Math.round((scrollOff / Math.max(1, total - maxLines)) * 100);
-					const barW = 16;
+					const barW = Math.min(16, Math.max(4, contentW - 10));
 					const thumb = Math.round((pct / 100) * (barW - 2));
 					const bar = "▓".repeat(Math.max(0, thumb)) + "░" + "▓".repeat(Math.max(0, barW - 2 - thumb));
 					c.addChild(new Text(
@@ -159,10 +164,12 @@ export function register(pi: ExtensionAPI): void {
 					if (selectedIdx >= allPhases.length) selectedIdx = 0;
 
 					const makeOv = (sc: number) => {
-						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: tui.rows });
+						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: tui.terminal.rows });
 						const overH = 10;
-						const maxSpec = Math.max(3, (tui.rows || 24) - overH);
-						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec));
+						const maxSpec = Math.max(3, (tui.terminal.rows || 24) - overH);
+						// Content width for wrapping: terminal cols minus margin (2) minus indent (4)
+						const specW = Math.max(20, (tui.terminal.columns || 80) - 8);
+						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW));
 						o.addFooter("↑↓ scroll  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close");
 						return o;
 					};
