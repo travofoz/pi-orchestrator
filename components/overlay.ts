@@ -41,6 +41,15 @@ function taper(width: number): string {
 	return s;
 }
 
+/** Taper with embedded title: ────━━━━════[ Title ]════━━━━──── */
+export function taperTitle(title: string, width: number, fg: (v: string, t: string) => string): string {
+	const titleStr = `═[ ${fg("text", title)} ]`;
+	const tv = visibleWidth(titleStr);
+	const lw = Math.floor((width - tv) / 2);
+	const rw = width - tv - lw;
+	return fg("accent", taper(lw) + titleStr + taper(rw));
+}
+
 export class Overlay {
 	private theme: ThemeProxy;
 	private title: string;

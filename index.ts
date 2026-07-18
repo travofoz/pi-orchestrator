@@ -41,6 +41,7 @@ import {
 	getPhaseList,
 	loadConfig,
 } from "./commands/ctx.ts";
+import { taperTitle } from "./components/overlay.ts";
 
 export default function (pi: ExtensionAPI) {
 	// Register all 14 bake commands at module level (once per /reload, never duplicated)
@@ -158,8 +159,8 @@ export default function (pi: ExtensionAPI) {
 				return [parts.join("  ")];
 			}
 
-			// Full mode — plain phase list
-			const header = t.fg("borderAccent", `──═[ bake ]═──`);
+			// Full mode — Gaussian taper header + phase list
+			const header = taperTitle("bake", 40, t.fg.bind(t));
 			const phaseLines = allPhases.map((phase) => {
 				if (state.completedPhases.includes(phase)) {
 					return ` ${t.fg("success", "✓")} ${t.fg("muted", phase)}`;

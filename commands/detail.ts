@@ -52,8 +52,8 @@ export function register(pi: ExtensionAPI): void {
 				return { icon: "○", color: "dim" as const };
 			};
 
-			/** Build the content body for the selected phase — event-log-driven. */
-			const buildBody = (theme: any, idx: number, st: typeof state) => {
+			/** Build the content body for the selected phase — scrollable. */
+			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20) => {
 				const c = new Container();
 				const name = allPhases[idx];
 
@@ -73,7 +73,7 @@ export function register(pi: ExtensionAPI): void {
 
 				if (phaseEvents.length > 0) {
 					c.addChild(new Text(theme.fg("toolTitle", "Event Log"), 1, 0));
-					for (const e of phaseEvents.slice(-20)) {
+					for (const e of phaseEvents.slice(-12)) {
 						const time = new Date(e.ts).toLocaleTimeString("en-US", {
 							hour: "2-digit", minute: "2-digit", second: "2-digit",
 						});
@@ -101,43 +101,73 @@ export function register(pi: ExtensionAPI): void {
 					c.addChild(new Text(theme.fg("dim", "  No events yet"), 1, 0));
 				}
 
-				// ── Spec content (compact) ──
+				// ── Spec content (scrollable) ──
 				const spec = readPhaseSpec(name);
 				const specLines = spec.split("\n").filter(Boolean);
+				// Collect all spec content lines (headings + body)
+				const contentLines: string[] = [];
 				let inSection = false;
-				let shown = 0;
-				c.addChild(new Spacer(1));
-				c.addChild(new Text(theme.fg("toolTitle", "Spec"), 1, 0));
 				for (const line of specLines) {
 					if (line.startsWith("## ")) {
 						inSection = true;
-						c.addChild(new Text(theme.fg("toolTitle", `  ${line.replace("## ", "")}`), 0, 0));
+						contentLines.push(`  ${line.replace("## ", "")}`);
 					} else if (inSection && line.trim()) {
-						if (shown < 8) {
-							c.addChild(new Text(theme.fg("muted", `    ${line}`), 0, 0));
-							shown++;
-						}
+						contentLines.push(`    ${line}`);
 					}
+				}
+
+				c.addChild(new Spacer(1));
+				c.addChild(new Text(theme.fg("toolTitle", "Spec"), 1, 0));
+				// Show scroll window from scrollOff
+				const visible = contentLines.slice(scrollOff, scrollOff + maxLines);
+				for (const v of visible) {
+					c.addChild(new Text(theme.fg("muted", v), 0, 0));
+				}
+				// Scroll indicator
+				if (scrollOff > 0) {
+					c.addChild(new Text(theme.fg("dim", `  ▲ ${scrollOff} more above`), 1, 0));
+				}
+				if (scrollOff + maxLines < contentLines.length) {
+					const rem = contentLines.length - scrollOff - maxLines;
+					c.addChild(new Text(theme.fg("dim", `  ▼ ${rem} more below`), 1, 0));
 				}
 
 				return c;
 			};
 
+			// ── Custom UI with scroll support ──
+			let scrollOffset = 0;
+
+			/** Count spec content lines for a phase (for scroll bounds). */
+			const specLineCount = (idx: number): number => {
+				const spec = readPhaseSpec(allPhases[idx]);
+				const lines = spec.split("\n").filter(Boolean);
+				let count = 0, inS = false;
+				for (const l of lines) {
+					if (l.startsWith("## ")) { inS = true; count++; }
+					else if (inS && l.trim()) { count++; }
+				}
+				return count;
+			};
+
 			await cmdCtx.ui.custom<void>(
-				(_tui, theme, _kb, done) => {
+				(tui, theme, _kb, done) => {
 					if (selectedIdx >= allPhases.length) selectedIdx = 0;
 
-					const makeOv = () => {
+					const makeOv = (sc: number) => {
 						const o = new Overlay(theme, { title: allPhases[selectedIdx] });
-						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot));
-						o.addFooter("↑↓ browse  ·  r retry  ·  s skip  ·  esc/q close");
+						const overH = 10;
+						const maxSpec = Math.max(3, (tui.rows || 24) - overH);
+						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec));
+						o.addFooter("↑↓ scroll  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close");
 						return o;
 					};
 
-					let ov = makeOv();
+					let ov = makeOv(scrollOffset);
 
 					const rebuild = () => {
-						ov = makeOv();
+						ov = makeOv(scrollOffset);
+						tui.requestRender();
 					};
 
 					return {
@@ -145,13 +175,27 @@ export function register(pi: ExtensionAPI): void {
 						invalidate: () => ov.invalidate(),
 						handleInput: (data: string) => {
 							if (data === "up" || data === "k") {
-								if (selectedIdx > 0) {
-									selectedIdx--;
+								if (scrollOffset > 0) {
+									scrollOffset--;
 									rebuild();
 								}
 							} else if (data === "down" || data === "j") {
+								const nlines = specLineCount(selectedIdx);
+								const maxScroll = Math.max(0, nlines - 10);
+								if (scrollOffset < maxScroll) {
+									scrollOffset++;
+									rebuild();
+								}
+							} else if (data === "n") {
 								if (selectedIdx < allPhases.length - 1) {
 									selectedIdx++;
+									scrollOffset = 0;
+									rebuild();
+								}
+							} else if (data === "p") {
+								if (selectedIdx > 0) {
+									selectedIdx--;
+									scrollOffset = 0;
 									rebuild();
 								}
 							} else if (data === "r") {
