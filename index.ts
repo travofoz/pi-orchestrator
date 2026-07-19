@@ -202,16 +202,9 @@ export default function (pi: ExtensionAPI) {
 		});
 
 		// ── Widget as a Component (TUI calls render() on each render cycle) ──
-		// The factory receives (tui, theme) — we store tui for the central animation timer
+		// No animation timer — widget scanner updates only on user interaction or state changes.
+		// This avoids competing with overlays (settings, detail, etc.) for render cycles.
 		ctx.ui.setWidget(WIDGET_ID, (tui: TUI, theme: Theme) => {
-			// ── Central animation tick: ONE timer at 24fps ──
-			// Single requestRender() per frame. No individual timers anywhere.
-			if (!bakeCtx.animTimer) {
-				bakeCtx.animTimer = setInterval(() => {
-					tui.requestRender();
-				}, Math.round(1000 / 24)); // ~42ms = 24fps
-			}
-
 			// Expose render trigger for config changes, state resets, etc.
 			bakeCtx.requestWidgetRender = () => tui.requestRender();
 

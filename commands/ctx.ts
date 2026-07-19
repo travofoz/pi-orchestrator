@@ -108,13 +108,11 @@ export const bakeCtx: {
 	bake: Bake | null;
 	closeLoader: (() => void) | null;
 	loaderMsg: string;
-	animTimer: ReturnType<typeof setInterval> | null;
 	/** Triggers a TUI re-render (so widget Component picks up new state). Set by widget factory. */
 	requestWidgetRender: (() => void) | null;
 } = {
 	bake: null,
 	closeLoader: null,
 	loaderMsg: "",
-	animTimer: null,
 	requestWidgetRender: null,
 };
