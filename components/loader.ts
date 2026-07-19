@@ -13,8 +13,8 @@
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
-// Light grey panel background — 256-color for wider compatibility
-const PANEL_BG = "\x1b[48;5;234m";
+// Near-black panel background — matches overlay dark theme
+const PANEL_BG = "\x1b[48;5;232m";
 const RESET_BLACK = "\x1b[0m\x1b[38;5;255m";
 
 function wrapPanel(text: string): string {
@@ -107,7 +107,7 @@ export class LoaderComponent implements Component {
 		const braiBot = GRN_D + brailleGauss(innerW) + RST;
 
 		return [
-			wrapPanel(left + braiDim + right(braiDim)),
+			wrapPanel(left + braiGreen + right(braiGreen)),
 			wrapPanel(left + topRule + right(topRule)),
 			wrapPanel(left + botRule + right(botRule)),
 			wrapPanel(left + braiBot + right(braiBot)),

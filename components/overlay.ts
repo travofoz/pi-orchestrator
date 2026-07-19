@@ -15,7 +15,7 @@ export type ThemeProxy = {
 	bg: (variant: string, text: string) => string;
 };
 
-const PANEL_BG = "\x1b[48;5;234m";
+const PANEL_BG = "\x1b[48;5;232m";
 const RESET_WHITE = "\x1b[0m\x1b[38;5;255m";
 
 function wrapPanel(text: string): string {
@@ -89,13 +89,11 @@ export class Overlay {
 	private title: string;
 	private body: Container;
 	private footerLines: string[];
-	private maxHeight: number;
 	private animStart: number;
 
-	constructor(theme: ThemeProxy, opts: { title?: string; maxHeight?: number } = {}) {
+	constructor(theme: ThemeProxy, opts: { title?: string } = {}) {
 		this.theme = theme;
 		this.title = opts.title ?? "";
-		this.maxHeight = opts.maxHeight ?? 0;
 		this.body = new Container();
 		this.footerLines = [];
 		this.animStart = Date.now();
@@ -150,13 +148,6 @@ export class Overlay {
 
 		// ── Bottom rule (mirrored scan) ──
 		result.push(scannerTaper(innerW, scanPos, t));
-
-		// ── Cap to maxHeight if set ──
-		let capped = result;
-		if (this.maxHeight > 0 && capped.length > this.maxHeight) {
-			capped = capped.slice(0, this.maxHeight);
-			capped[capped.length - 1] = dim("  ▼ truncated");
-		}
 
 		// ── Pad with dark grey bg + margin ──
 		const leftPad = " ".repeat(margin);

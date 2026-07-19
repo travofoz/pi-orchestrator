@@ -53,17 +53,21 @@ export function register(pi: ExtensionAPI): void {
 			};
 
 			/** Build the content body for the selected phase — scrollable, line-wrapped. */
-			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50) => {
+			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50, mode: "browse" | "scroll" = "scroll") => {
 				const c = new Container();
 				const name = allPhases[idx];
 
-				// ── Phase list (compact) ──
+				// ── Phase list (compact) — cursor in browse mode, dimmed in scroll mode ──
+				const inBrowse = mode === "browse";
 				for (let i = 0; i < allPhases.length; i++) {
 					const p = allPhases[i];
 					const s = phaseStatus(p, st);
-					const marker = i === idx ? theme.fg("accent", "▸") : " ";
-					const icon = theme.fg(s.color, s.icon);
-					const label = i === idx ? theme.fg("accent", theme.bold(p)) : theme.fg(s.color, p);
+					const isSelected = i === idx;
+					const marker = isSelected ? (inBrowse ? theme.fg("accent", "▸") : theme.fg("dim", "▸")) : " ";
+					const icon = isSelected && inBrowse ? theme.fg("accent", s.icon) : theme.fg(s.color, s.icon);
+					const label = isSelected
+						? (inBrowse ? theme.fg("accent", theme.bold(p)) : theme.fg(s.color, theme.bold(p)))
+						: theme.fg(s.color, p);
 					c.addChild(new Text(`${marker} ${icon} ${label}`, 1, 0));
 				}
 
@@ -129,8 +133,8 @@ export function register(pi: ExtensionAPI): void {
 				for (const v of visible) {
 					c.addChild(new Text(theme.fg("muted", v), 0, 0));
 				}
-				// Scrollbar — compact position indicator
-				if (total > maxLines) {
+				// Scrollbar — only in scroll mode, shows position
+				if (mode === "scroll" && total > maxLines) {
 					const pct = Math.round((scrollOff / Math.max(1, total - maxLines)) * 100);
 					const barW = Math.min(16, Math.max(4, contentW - 10));
 					const thumb = Math.round((pct / 100) * (barW - 2));
@@ -159,6 +163,8 @@ export function register(pi: ExtensionAPI): void {
 				return count;
 			};
 
+			let mode: "browse" | "scroll" = "scroll";
+
 			bakeCtx.widgetHidden = true;
 			try {
 			await cmdCtx.ui.custom<void>(
@@ -168,16 +174,14 @@ export function register(pi: ExtensionAPI): void {
 					let ov: Overlay | null = null;
 
 					const makeOv = (sc: number) => {
-						if (ov) ov.dispose(); // dispose previous overlay (no timers — scan is time-computed)
-						const o = new Overlay(theme, {
-							title: allPhases[selectedIdx],
-							maxHeight: tui.terminal.rows,
-						});
+						if (ov) ov.dispose();
+						const o = new Overlay(theme, { title: allPhases[selectedIdx] });
 						const overH = 10;
 						const maxSpec = Math.max(3, (tui.terminal.rows || 24) - overH);
 						const specW = Math.max(20, (tui.terminal.columns || 80) - 8);
-						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW));
-						o.addFooter("↑↓ scroll  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close");
+						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode));
+						const modeTag = mode === "browse" ? theme.fg("accent", "[BROWSE]") : theme.fg("dim", "[scroll]");
+						o.addFooter(`${modeTag}  tab switch  ·  ↑↓ ${mode === "browse" ? "phase" : "scroll"}  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`);
 						return o;
 					};
 
@@ -192,17 +196,36 @@ export function register(pi: ExtensionAPI): void {
 						render: (w: number) => ov.render(w),
 						invalidate: () => ov.invalidate(),
 						handleInput: (data: string) => {
-							if (data === "up" || data === "k") {
-								if (scrollOffset > 0) {
-									scrollOffset--;
-									rebuild();
+							if (data === "tab" || data === "\t") {
+								mode = mode === "browse" ? "scroll" : "browse";
+								rebuild();
+							} else if (data === "up" || data === "k") {
+								if (mode === "browse") {
+									if (selectedIdx > 0) {
+										selectedIdx--;
+										scrollOffset = 0;
+										rebuild();
+									}
+								} else {
+									if (scrollOffset > 0) {
+										scrollOffset--;
+										rebuild();
+									}
 								}
 							} else if (data === "down" || data === "j") {
-								const nlines = specLineCount(selectedIdx);
-								const maxScroll = Math.max(0, nlines - 10);
-								if (scrollOffset < maxScroll) {
-									scrollOffset++;
-									rebuild();
+								if (mode === "browse") {
+									if (selectedIdx < allPhases.length - 1) {
+										selectedIdx++;
+										scrollOffset = 0;
+										rebuild();
+									}
+								} else {
+									const nlines = specLineCount(selectedIdx);
+									const maxScroll = Math.max(0, nlines - 10);
+									if (scrollOffset < maxScroll) {
+										scrollOffset++;
+										rebuild();
+									}
 								}
 							} else if (data === "n") {
 								if (selectedIdx < allPhases.length - 1) {
