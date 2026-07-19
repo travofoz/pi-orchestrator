@@ -242,6 +242,8 @@ export function register(pi: ExtensionAPI): void {
 						render: (w: number) => ov.render(w),
 						invalidate: () => ov.invalidate(),
 						handleInput: (data: string) => {
+							const dbg = () => fs.appendFileSync("/tmp/bake-detail.log", `${Date.now()} KEY=${JSON.stringify(data)} h=${data.split("").map(c=>c.charCodeAt(0).toString(16)).join(" ")} mode=${mode} idx=${selectedIdx} sc=${scrollOffset}\n`);
+							dbg();
 							// v / c: cycle view
 							if (data === "v" || data === "c") {
 								const cycle: ("phases" | "events" | "spec" | "workspace")[] = ["phases", "events", "spec", "workspace"];
