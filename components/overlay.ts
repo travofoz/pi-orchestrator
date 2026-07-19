@@ -151,7 +151,7 @@ export class Overlay {
 
 		// ── Pad with dark grey bg + margin ──
 		const leftPad = " ".repeat(margin);
-		return capped.map((line) => {
+		return result.map((line) => {
 			const vis = visibleWidth(line);
 			const rightPad = " ".repeat(Math.max(0, fullW - margin - vis - margin));
 			return wrapPanel(leftPad + line + rightPad);
