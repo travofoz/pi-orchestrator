@@ -183,20 +183,20 @@ export function register(pi: ExtensionAPI): void {
 						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: (tui.terminal.rows || 24) - 1 });
 						const avail = tui.terminal.rows || 24;
 						const compact = avail < 25; // skip phase list + events on small terminals
-						if (compact && mode !== "spec") mode = "spec"; // force spec-only
+						if (compact) mode = "spec"; // force spec-only in compact mode
 						const overH = compact ? 5 : 10;
 						const maxSpec = Math.max(3, avail - overH);
 						const specW = Math.max(20, (tui.terminal.columns || 80) - 8);
 						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode, compact, eventScroll));
-						const modeTag =
-							mode === "phases" ? theme.fg("accent", "[PHASES]") :
-							mode === "events" ? theme.fg("accent", "[EVENTS]") :
-							theme.fg("dim", "[spec]");
-						const modeAction =
-							mode === "phases" ? "phase" :
-							mode === "events" ? "events" :
-							"scroll";
-						o.addFooter(`${modeTag}  tab cycle  ·  ↑↓ ${modeAction}  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`);
+						const modeTag = compact
+							? theme.fg("dim", "[spec]")
+							: mode === "phases" ? theme.fg("accent", "[PHASES]")
+							: mode === "events" ? theme.fg("accent", "[EVENTS]")
+							: theme.fg("dim", "[spec]");
+						const modeAction = mode === "phases" ? "phase" : mode === "events" ? "events" : "scroll";
+						o.addFooter(compact
+							? `${modeTag}  ↑↓ scroll  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`
+							: `${modeTag}  tab cycle  ·  ↑↓ ${modeAction}  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`);
 						return o;
 					};
 
@@ -212,7 +212,8 @@ export function register(pi: ExtensionAPI): void {
 						invalidate: () => ov.invalidate(),
 						handleInput: (data: string) => {
 							if (matchesKey(data, "tab") || data === "\t" || data === "tab") {
-								// In compact mode (<25 rows), makeOv clamps to spec-only — still cycle so it's not silently ignored
+								// In compact mode, Tab is a no-op — only spec pane is available
+								if ((tui.terminal.rows || 24) < 25) return;
 								const cycle: ("phases" | "events" | "spec")[] = ["phases", "events", "spec"];
 								const idx = cycle.indexOf(mode);
 								mode = cycle[(idx + 1) % cycle.length];
