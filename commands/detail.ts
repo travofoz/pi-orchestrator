@@ -53,21 +53,21 @@ export function register(pi: ExtensionAPI): void {
 			};
 
 			/** Build the content body for the selected phase — scrollable, line-wrapped. */
-			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50, mode: "browse" | "scroll" = "scroll", compact = false) => {
+			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50, mode: "phases" | "events" | "spec" = "spec", compact = false, eventOff = 0) => {
 				const c = new Container();
 				const name = allPhases[idx];
 
 				// ── Phase list — skipped in compact mode (title shows phase name, Tab+Browse navigates) ──
 				if (!compact) {
-					const inBrowse = mode === "browse";
+					const inPhases = mode === "phases";
 					for (let i = 0; i < allPhases.length; i++) {
 						const p = allPhases[i];
 						const s = phaseStatus(p, st);
 						const isSelected = i === idx;
-						const marker = isSelected ? (inBrowse ? theme.fg("accent", "▸") : theme.fg("dim", "▸")) : " ";
-						const icon = isSelected && inBrowse ? theme.fg("accent", s.icon) : theme.fg(s.color, s.icon);
+						const marker = isSelected ? (inPhases ? theme.fg("accent", "▸") : theme.fg("dim", "▸")) : " ";
+						const icon = isSelected && inPhases ? theme.fg("accent", s.icon) : theme.fg(s.color, s.icon);
 						const label = isSelected
-							? (inBrowse ? theme.fg("accent", theme.bold(p)) : theme.fg(s.color, theme.bold(p)))
+							? (inPhases ? theme.fg("accent", theme.bold(p)) : theme.fg(s.color, theme.bold(p)))
 							: theme.fg(s.color, p);
 						c.addChild(new Text(`${marker} ${icon} ${label}`, 1, 0));
 					}
@@ -76,9 +76,11 @@ export function register(pi: ExtensionAPI): void {
 					const allEvents = bake!.eventLog.tail(500);
 					const phaseEvents = allEvents.filter((e) => e.data?.phase === name || e.type === `phase_${name}`).reverse();
 
+					const inEvents = mode === "events";
 					if (phaseEvents.length > 0) {
-						c.addChild(new Text(theme.fg("toolTitle", "Event Log"), 1, 0));
-						for (const e of phaseEvents.slice(-12)) {
+						c.addChild(new Text(inEvents ? theme.fg("accent", theme.bold("Event Log")) : theme.fg("toolTitle", "Event Log"), 1, 0));
+						const visibleEvents = phaseEvents.slice(-12).slice(eventOff, eventOff + 8);
+						for (const e of visibleEvents) {
 							const time = new Date(e.ts).toLocaleTimeString("en-US", {
 								hour: "2-digit", minute: "2-digit", second: "2-digit",
 							});
@@ -136,7 +138,7 @@ export function register(pi: ExtensionAPI): void {
 					c.addChild(new Text(theme.fg("muted", v), 0, 0));
 				}
 				// Scrollbar — only in scroll mode, shows position
-				if (mode === "scroll" && total > maxLines) {
+				if (mode === "spec" && total > maxLines) {
 					const pct = Math.round((scrollOff / Math.max(1, total - maxLines)) * 100);
 					const barW = Math.min(16, Math.max(4, contentW - 10));
 					const thumb = Math.round((pct / 100) * (barW - 2));
@@ -165,7 +167,8 @@ export function register(pi: ExtensionAPI): void {
 				return count;
 			};
 
-			let mode: "browse" | "scroll" = "scroll";
+			let eventScroll = 0;
+			let mode: "phases" | "events" | "spec" = "spec";
 
 			bakeCtx.widgetHidden = true;
 			try {
@@ -180,12 +183,20 @@ export function register(pi: ExtensionAPI): void {
 						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: (tui.terminal.rows || 24) - 1 });
 						const avail = tui.terminal.rows || 24;
 						const compact = avail < 25; // skip phase list + events on small terminals
+						if (compact && mode !== "spec") mode = "spec"; // force spec-only
 						const overH = compact ? 5 : 10;
 						const maxSpec = Math.max(3, avail - overH);
 						const specW = Math.max(20, (tui.terminal.columns || 80) - 8);
-						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode, compact));
-						const modeTag = mode === "browse" ? theme.fg("accent", "[BROWSE]") : theme.fg("dim", "[scroll]");
-						o.addFooter(`${modeTag}  tab switch  ·  ↑↓ ${mode === "browse" ? "phase" : "scroll"}  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`);
+						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode, compact, eventScroll));
+						const modeTag =
+							mode === "phases" ? theme.fg("accent", "[PHASES]") :
+							mode === "events" ? theme.fg("accent", "[EVENTS]") :
+							theme.fg("dim", "[spec]");
+						const modeAction =
+							mode === "phases" ? "phase" :
+							mode === "events" ? "events" :
+							"scroll";
+						o.addFooter(`${modeTag}  tab cycle  ·  ↑↓ ${modeAction}  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`);
 						return o;
 					};
 
@@ -201,13 +212,23 @@ export function register(pi: ExtensionAPI): void {
 						invalidate: () => ov.invalidate(),
 						handleInput: (data: string) => {
 							if (data === "tab" || data === "\t") {
-								mode = mode === "browse" ? "scroll" : "browse";
+								// Skip cycling in compact mode — only spec is available
+								if ((tui.terminal.rows || 24) < 25) return;
+								const cycle: ("phases" | "events" | "spec")[] = ["phases", "events", "spec"];
+								const idx = cycle.indexOf(mode);
+								mode = cycle[(idx + 1) % cycle.length];
 								rebuild();
 							} else if (data === "up" || data === "k") {
-								if (mode === "browse") {
+								if (mode === "phases") {
 									if (selectedIdx > 0) {
 										selectedIdx--;
 										scrollOffset = 0;
+										eventScroll = 0;
+										rebuild();
+									}
+								} else if (mode === "events") {
+									if (eventScroll > 0) {
+										eventScroll--;
 										rebuild();
 									}
 								} else {
@@ -217,10 +238,17 @@ export function register(pi: ExtensionAPI): void {
 									}
 								}
 							} else if (data === "down" || data === "j") {
-								if (mode === "browse") {
+								if (mode === "phases") {
 									if (selectedIdx < allPhases.length - 1) {
 										selectedIdx++;
 										scrollOffset = 0;
+										eventScroll = 0;
+										rebuild();
+									}
+								} else if (mode === "events") {
+									// Events limited to 12 — minimal scrolling needed
+									if (eventScroll < 6) {
+										eventScroll++;
 										rebuild();
 									}
 								} else {
@@ -235,12 +263,14 @@ export function register(pi: ExtensionAPI): void {
 								if (selectedIdx < allPhases.length - 1) {
 									selectedIdx++;
 									scrollOffset = 0;
+									eventScroll = 0;
 									rebuild();
 								}
 							} else if (data === "p") {
 								if (selectedIdx > 0) {
 									selectedIdx--;
 									scrollOffset = 0;
+									eventScroll = 0;
 									rebuild();
 								}
 							} else if (data === "r") {
