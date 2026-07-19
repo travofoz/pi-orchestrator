@@ -89,57 +89,42 @@ export default function (pi: ExtensionAPI) {
 
 		const t = ctx.ui.theme;
 
-		// ── Responsive working indicator: mirrored braille scanner, no text ──
-		// Frame width = cols - 3 to fit Text's paddingX=1 on each side + Loader's trailing space.
+		// ── Working indicator: single continuous braille track, full width ──
+		// Two bright spots sweep from center outward (in→out, mirrored) across one track.
 		const buildWorkingFrames = (cols: number) => {
-			const avail = Math.max(10, cols - 3);
-			const W = Math.max(4, Math.floor(avail / 2)); // each side: half of available
+			const W = Math.max(8, cols - 3);
 			const B = ["⠀", "⡀", "⡠", "⡦", "⡶", "⣶", "⣿"];
 			const frames: string[] = [];
-			const makeFrame = (spreadPos: number) => {
-				const leftPos = W - 1 - spreadPos;
-				const rightPos = spreadPos;
-				const buildSide = (pos: number, len: number): string => {
-					const cells: string[] = [];
-					for (let i = 0; i < len; i++) {
-						const dist = Math.abs(i - pos);
-						const cf = 1 - Math.abs(pos - (len - 1) / 2) / ((len - 1) / 2);
-						const spread = 2 + Math.floor(cf * 4);
-						const b = Math.max(0, Math.min(6, spread - dist));
-						cells.push(t.fg(
-							b >= 5 ? "accent" : b >= 3 ? "muted" : b >= 1 ? "dim" : "muted",
-							B[b],
-						));
-					}
-					return cells.join("");
-				};
-				const leftScan = buildSide(leftPos, W);
-				// Right scan mirrors left — just repeat same cells
-				const rightScan = buildSide(rightPos, W);
-				const content = leftScan + " " + rightScan;
-				const cw = 2 * W + 1;
-				const pad = Math.max(0, Math.floor((avail - cw) / 2));
-				return " ".repeat(pad) + content + " ".repeat(avail - pad - cw);
+			const makeFrame = (spread: number) => {
+				const ct = (W - 1) / 2;
+				const leftScan = Math.round(ct - spread * ct);
+				const rightScan = Math.round(ct + spread * ct);
+				const cells: string[] = [];
+				for (let i = 0; i < W; i++) {
+					const minDist = Math.min(Math.abs(i - leftScan), Math.abs(i - rightScan));
+					const b = minDist <= 1 ? 6 : minDist <= 3 ? 4 : minDist <= 6 ? 2 : 0;
+					cells.push(t.fg(minDist <= 3 ? "accent" : b >= 2 ? "muted" : "dim", B[b]));
+				}
+				return cells.join("");
 			};
-			for (let p = 0; p < W; p++) frames.push(makeFrame(p));
-			for (let p = W - 2; p >= 0; p--) frames.push(makeFrame(p));
+			const steps = 25;
+			for (let i = 0; i <= steps; i++) frames.push(makeFrame(i / steps));
+			for (let i = steps - 1; i >= 0; i--) frames.push(makeFrame(i / steps));
 			return frames;
 		};
 
 		// ── Initial working indicator at current terminal width ──
-		const initCols = process.stdout.columns || 80;
-		ctx.ui.setWorkingIndicator({ frames: buildWorkingFrames(initCols), intervalMs: 60 });
+		ctx.ui.setWorkingIndicator({
+			frames: buildWorkingFrames(process.stdout.columns || 80),
+			intervalMs: 60,
+		});
 
-		// ── Widget header scanner animation (clear old on reload) ──
-		let widgetScanPos = 0;
-		let widgetScanDir = 1;
+		// ── Widget header: time-based scanner (no mutable timer state to desync) ──
+		const widgetStartTime = Date.now();
 		if (bakeCtx.widgetAnimTimer) clearInterval(bakeCtx.widgetAnimTimer);
 		bakeCtx.widgetAnimTimer = setInterval(() => {
-			widgetScanPos += widgetScanDir * 0.008;
-			if (widgetScanPos >= 1) { widgetScanPos = 1; widgetScanDir = -1; }
-			if (widgetScanPos <= 0) { widgetScanPos = 0; widgetScanDir = 1; }
 			bakeCtx.requestWidgetRender?.();
-		}, 150);
+		}, 1000);
 
 		const renderWidget = () => {
 			const cfg = loadConfig();
@@ -179,10 +164,12 @@ export default function (pi: ExtensionAPI) {
 				return [parts.join("  ")];
 			}
 
-			// Full mode — animated pink/green scanner header + phase list
+			// Full mode — time-based pink/green scanner header (no desync)
 			const cols = process.stdout.columns || 80;
 			const headerW = Math.max(30, cols - 4);
-			const header = scannerTaper(headerW, widgetScanPos, t, "bake");
+			const elapsed = (Date.now() - widgetStartTime) / 1000;
+			const scanPos = Math.abs(Math.sin(elapsed * 0.17));
+			const header = scannerTaper(headerW, scanPos, t, "bake");
 			const phaseLines = allPhases.map((phase) => {
 				if (state.completedPhases.includes(phase)) {
 					return ` ${t.fg("success", "✓")} ${t.fg("muted", phase)}`;
