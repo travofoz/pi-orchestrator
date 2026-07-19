@@ -1,27 +1,23 @@
 /**
- * Overlay wrapper — clean Gaussian taper rule.
+ * Overlay wrapper — animated pink/green laser scanner taper.
  *
- *   ────━━━━━━━━══════════[ Bake Config ]══════════━━━━━━━━────
+ *   ────━━━━━━━━══════════[ Title ]══════════━━━━━━━━────
+ *   Pink spotlight sweeps from center leftward and rightward
+ *   in sync — classic KITT scanner on the taper line.
  *
- *       Widget mode: [full]
- *       ↑↓ navigate  ·  ← → change
- *
- *   ────━━━━━━━━══════════════════════════════════════━━━━━━━━────
- *
- * Single line top and bottom. Thin dashes (─) at edges, medium (━)
- * mid, thick equals (═) at center — Gaussian fat-middle/narrow-edges
- * principle. Charcoal dark grey bg, white text, 2-col margin.
+ *   Dark grey bg, white text, 2-col margin.
  */
 
 import { Container, Text, visibleWidth } from "@earendil-works/pi-tui";
+import type { TUI } from "@earendil-works/pi-tui";
 
 export type ThemeProxy = {
 	fg: (variant: string, text: string) => string;
 	bg: (variant: string, text: string) => string;
 };
 
-const PANEL_BG = "\x1b[48;5;234m";  // dark grey (256-color)
-const RESET_WHITE = "\x1b[0m\x1b[38;5;255m";  // white text
+const PANEL_BG = "\x1b[48;5;234m";
+const RESET_WHITE = "\x1b[0m\x1b[38;5;255m";
 
 function wrapPanel(text: string): string {
 	return PANEL_BG + text + RESET_WHITE;
@@ -29,25 +25,82 @@ function wrapPanel(text: string): string {
 
 const TAPER_CHARS = ["─", "━", "═"];
 
-function taper(width: number): string {
-	if (width <= 0) return "";
-	let s = "";
+function taperChars(width: number): string[] {
+	const chars: string[] = [];
 	for (let i = 0; i < width; i++) {
 		const ct = (width - 1) / 2;
 		const dist = Math.abs(i - ct) / Math.max(1, ct);
 		const idx = Math.round((1 - dist) * (TAPER_CHARS.length - 1));
-		s += TAPER_CHARS[Math.max(0, Math.min(idx, TAPER_CHARS.length - 1))];
+		chars.push(TAPER_CHARS[Math.max(0, Math.min(idx, TAPER_CHARS.length - 1))]);
 	}
-	return s;
+	return chars;
 }
 
-/** Taper with embedded title: ────━━━━════[ Title ]════━━━━──── */
+const PINK_BRIGHT = "\x1b[38;5;213m";
+const PINK_MID = "\x1b[38;5;175m";
+const PINK_DIM = "\x1b[38;5;95m";
+const GREEN_BRIGHT = "\x1b[38;5;119m";
+const GREEN_MID = "\x1b[38;5;108m";
+const GREEN_DIM = "\x1b[38;5;65m";
+const RESET = "\x1b[0m";
+const WHITE_FG = "\x1b[38;5;255m";
+
+/** Color a character based on distance from scanner center. */
+function scannerColor(ch: string, distFromScan: number, leftSide: boolean): string {
+	// Scanner zone (3 cols wide): bright
+	// Fringe (4-6 cols): mid
+	// Rest: dim
+	const pink = distFromScan <= 1 ? PINK_BRIGHT : distFromScan <= 3 ? PINK_MID : PINK_DIM;
+	const green = distFromScan <= 1 ? GREEN_BRIGHT : distFromScan <= 3 ? GREEN_MID : GREEN_DIM;
+	const color = leftSide ? pink : green;
+	return `${color}${ch}${RESET}`;
+}
+
+/** Build a single animated taper line with pink/green scanner sweep.
+ *  Scanner spreads from center outward (in → out, mirrored). */
+export function scannerTaper(width: number, scanSpread: number, t: ThemeProxy, title?: string): string {
+	if (width <= 0) return "";
+	const chars = taperChars(width);
+	const ct = (width - 1) / 2;
+	// scanSpread 0 = center, 1 = both edges
+	const leftScan = Math.round(ct - scanSpread * ct);
+	const rightScan = Math.round(ct + scanSpread * ct);
+
+	const colorLine = (lineChars: string[], offset: number): string => {
+		return lineChars.map((ch, i) => {
+			const absIdx = offset + i;
+			// Distance from the closer scanner
+			const distL = Math.abs(absIdx - leftScan);
+			const distR = Math.abs(absIdx - rightScan);
+			const minDist = Math.min(distL, distR);
+			if (minDist <= 6) {
+				const leftSide = absIdx <= ct;
+				return scannerColor(ch, minDist, leftSide);
+			}
+			const dim = absIdx <= ct ? PINK_DIM : GREEN_DIM;
+			return `${dim}${ch}${RESET}`;
+		}).join("");
+	};
+
+	if (title) {
+		const titleStr = `═[ ${t.fg("text", title)} ]`;
+		const tv = visibleWidth(titleStr);
+		const lw = Math.floor((width - tv) / 2);
+		const rw = width - tv - lw;
+		const left = colorLine(chars.slice(0, lw), 0);
+		const right = colorLine(chars.slice(lw + tv, lw + tv + rw), lw + tv);
+		return left + titleStr + right;
+	}
+
+	return colorLine(chars, 0);
+}
+
 export function taperTitle(title: string, width: number, fg: (v: string, t: string) => string): string {
 	const titleStr = `═[ ${fg("text", title)} ]`;
 	const tv = visibleWidth(titleStr);
 	const lw = Math.floor((width - tv) / 2);
 	const rw = width - tv - lw;
-	return fg("accent", taper(lw) + titleStr + taper(rw));
+	return fg("accent", taperChars(lw).join("") + titleStr + taperChars(rw).join(""));
 }
 
 export class Overlay {
@@ -56,13 +109,27 @@ export class Overlay {
 	private body: Container;
 	private footerLines: string[];
 	private maxHeight: number;
+	private tui?: TUI;
+	private scanPos = 0;
+	private scanDir = 1;
+	private animTimer?: ReturnType<typeof setInterval>;
 
-	constructor(theme: ThemeProxy, opts: { title?: string; maxHeight?: number } = {}) {
+	constructor(theme: ThemeProxy, opts: { title?: string; maxHeight?: number; tui?: TUI } = {}) {
 		this.theme = theme;
 		this.title = opts.title ?? "";
-		this.maxHeight = opts.maxHeight ?? 0; // 0 = unlimited
+		this.maxHeight = opts.maxHeight ?? 0;
+		this.tui = opts.tui;
 		this.body = new Container();
 		this.footerLines = [];
+
+		if (this.tui) {
+			this.animTimer = setInterval(() => {
+				this.scanPos += this.scanDir * 0.02;
+				if (this.scanPos >= 1) { this.scanPos = 1; this.scanDir = -1; }
+				if (this.scanPos <= 0) { this.scanPos = 0; this.scanDir = 1; }
+				this.tui!.requestRender();
+			}, 50);
+		}
 	}
 
 	addBody(component: { render: (w: number) => string[]; invalidate: () => void }): void {
@@ -73,24 +140,19 @@ export class Overlay {
 		this.footerLines.push(line);
 	}
 
+	dispose(): void {
+		if (this.animTimer) clearInterval(this.animTimer);
+	}
+
 	render(fullW: number): string[] {
 		const margin = 2;
 		const innerW = Math.max(20, fullW - margin * 2);
 		const t = this.theme;
-		const a = (s: string) => t.fg("accent", s);
 		const dim = (s: string) => t.fg("dim", s);
 		const result: string[] = [];
 
-		// ── Top rule with title ──
-		if (this.title) {
-			const titleStr = `═[ ${t.fg("text", this.title)} ]`;
-			const titleVis = visibleWidth(titleStr);
-			const leftW = Math.floor((innerW - titleVis) / 2);
-			const rightW = innerW - titleVis - leftW;
-			result.push(a(taper(leftW) + titleStr + taper(rightW)));
-		} else {
-			result.push(a(taper(innerW)));
-		}
+		// ── Top rule with animated scanner + title ──
+		result.push(scannerTaper(innerW, this.scanPos, t, this.title));
 
 		result.push("");
 
@@ -110,8 +172,8 @@ export class Overlay {
 
 		if (this.footerLines.length > 0) result.push("");
 
-		// ── Bottom rule ──
-		result.push(a(taper(innerW)));
+		// ── Bottom rule (mirrored scan) ──
+		result.push(scannerTaper(innerW, this.scanPos, t));
 
 		// ── Cap to maxHeight if set ──
 		let capped = result;

@@ -41,7 +41,7 @@ import {
 	getPhaseList,
 	loadConfig,
 } from "./commands/ctx.ts";
-import { taperTitle } from "./components/overlay.ts";
+import { scannerTaper } from "./components/overlay.ts";
 
 export default function (pi: ExtensionAPI) {
 	// Register all 14 bake commands at module level (once per /reload, never duplicated)
@@ -94,19 +94,16 @@ export default function (pi: ExtensionAPI) {
 		// Fat in middle, narrow at ends — sweeps LTR like Knight Rider
 		{
 			const W = 24;
-			// Braille fill levels from dimmest to brightest
 			const B = ["⠀", "⡀", "⡠", "⡦", "⡶", "⣶", "⣿"];
 			const frames: string[] = [];
 			const makeFrame = (pos: number) => {
 				const cells: string[] = [];
 				for (let i = 0; i < W; i++) {
 					const dist = Math.abs(i - pos);
-					// Spread depends on position: wider near center, narrower at edges
 					const centerFactor = 1 - Math.abs(pos - (W - 1) / 2) / ((W - 1) / 2);
-					const spread = 2 + Math.floor(centerFactor * 4); // 2-6 cells wide
+					const spread = 2 + Math.floor(centerFactor * 4);
 					const b = Math.max(0, Math.min(6, spread - dist));
 					const braille = B[b];
-					// Color: bright head = accent, dim falloff = muted, track = dim
 					const color =
 						b >= 5 ? "accent" :
 						b >= 3 ? "muted" :
@@ -115,11 +112,20 @@ export default function (pi: ExtensionAPI) {
 				}
 				return cells.join("");
 			};
-			// Sweep right → left
 			for (let p = 0; p < W; p++) frames.push(makeFrame(p));
 			for (let p = W - 2; p > 0; p--) frames.push(makeFrame(p));
 			ctx.ui.setWorkingIndicator({ frames, intervalMs: 60 });
 		}
+
+		// ── Widget header scanner animation ──
+		let widgetScanPos = 0;
+		let widgetScanDir = 1;
+		const widgetAnimTimer = setInterval(() => {
+			widgetScanPos += widgetScanDir * 0.025;
+			if (widgetScanPos >= 1) { widgetScanPos = 1; widgetScanDir = -1; }
+			if (widgetScanPos <= 0) { widgetScanPos = 0; widgetScanDir = 1; }
+			bakeCtx.requestWidgetRender?.();
+		}, 50);
 
 		const renderWidget = () => {
 			const cfg = loadConfig();
@@ -159,8 +165,8 @@ export default function (pi: ExtensionAPI) {
 				return [parts.join("  ")];
 			}
 
-			// Full mode — Gaussian taper header + phase list
-			const header = taperTitle("bake", 40, t.fg.bind(t));
+			// Full mode — animated pink/green scanner header + phase list
+			const header = scannerTaper(40, widgetScanPos, t, "bake");
 			const phaseLines = allPhases.map((phase) => {
 				if (state.completedPhases.includes(phase)) {
 					return ` ${t.fg("success", "✓")} ${t.fg("muted", phase)}`;

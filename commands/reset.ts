@@ -12,8 +12,8 @@ export function register(pi: ExtensionAPI): void {
 			const t = cmdCtx.ui.theme;
 
 			const confirmed = await cmdCtx.ui.custom<boolean>(
-				(_tui, theme, _kb, done) => {
-					const ov = new Overlay(theme, { title: "⚠ Reset Bake Pipeline" });
+				(tui, theme, _kb, done) => {
+					const ov = new Overlay(theme, { title: "⚠ Reset Bake Pipeline", tui });
 
 					ov.addBody(new Text(theme.fg("warning", "This will destroy:"), 1, 0));
 					ov.addBody(new Text(theme.fg("text", "  • Workspace (build artifacts, node_modules)"), 2, 0));
@@ -42,6 +42,7 @@ export function register(pi: ExtensionAPI): void {
 								done(false);
 							}
 						},
+						dispose: () => ov.dispose(),
 					};
 				},
 				{ overlay: true },

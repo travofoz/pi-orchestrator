@@ -163,18 +163,24 @@ export function register(pi: ExtensionAPI): void {
 				(tui, theme, _kb, done) => {
 					if (selectedIdx >= allPhases.length) selectedIdx = 0;
 
+					let ov: Overlay | null = null;
+
 					const makeOv = (sc: number) => {
-						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: tui.terminal.rows });
+						if (ov) ov.dispose(); // stop old animation timer
+						const o = new Overlay(theme, {
+							title: allPhases[selectedIdx],
+							maxHeight: tui.terminal.rows,
+							tui, // wire up scanner animation
+						});
 						const overH = 10;
 						const maxSpec = Math.max(3, (tui.terminal.rows || 24) - overH);
-						// Content width for wrapping: terminal cols minus margin (2) minus indent (4)
 						const specW = Math.max(20, (tui.terminal.columns || 80) - 8);
 						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW));
 						o.addFooter("↑↓ scroll  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close");
 						return o;
 					};
 
-					let ov = makeOv(scrollOffset);
+					ov = makeOv(scrollOffset);
 
 					const rebuild = () => {
 						ov = makeOv(scrollOffset);
@@ -220,6 +226,7 @@ export function register(pi: ExtensionAPI): void {
 								done(undefined);
 							}
 						},
+						dispose: () => ov.dispose(),
 					};
 				},
 				{ overlay: true },
