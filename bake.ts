@@ -129,6 +129,10 @@ export class Bake {
 		try { fs.rmSync(path.join(this.bakeDir, "archive"), { recursive: true, force: true }); } catch { /* ignore */ }
 		try { fs.rmSync(path.join(this.bakeDir, "spec-context.md"), { force: true }); } catch { /* ignore */ }
 
+		// Nuke phases dir — reset means reset
+		try { fs.rmSync(this.phasesDir, { recursive: true, force: true }); } catch { /* ignore */ }
+		try { fs.mkdirSync(this.phasesDir, { recursive: true }); } catch { /* ignore */ }
+
 		this.resetState();
 	}
 
@@ -505,6 +509,11 @@ export class Bake {
 		});
 
 		return output;
+	}
+
+	/** Show/hide the loader indicator with a status message. */
+	setLoader(show: boolean, msg: string): void {
+		this._onLoader?.(show, msg);
 	}
 
 	/** Abort the current RPC agent operation. */

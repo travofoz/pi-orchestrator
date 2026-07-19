@@ -112,10 +112,13 @@ export const bakeCtx: {
 	requestWidgetRender: (() => void) | null;
 	/** When true, BakeWidget.render() returns empty (no widget visible). Toggled by overlay commands. */
 	widgetHidden: boolean;
+	/** Reference to the widget instance, so state change handler can reset scanner timer. */
+	widgetRef: { reset: () => void } | null;
 } = {
 	bake: null,
 	closeLoader: null,
 	loaderMsg: "",
 	requestWidgetRender: null,
 	widgetHidden: false,
+	widgetRef: null,
 };

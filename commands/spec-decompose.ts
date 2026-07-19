@@ -4,6 +4,117 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { LoaderComponent } from "../components/loader.ts";
 import { bakeCtx, BAKE_BASE, BAKE_DB_DIR, PHASES_DIR } from "./ctx.ts";
 
+// ── JSON repair helpers for fragile LLM output ─────────────────────────
+
+/**
+ * Attempt to fix common JSON issues produced by LLMs:
+ * 1. Trailing commas in arrays/objects
+ * 2. Unescaped control characters in strings
+ * 3. Single-quoted strings instead of double-quoted
+ * 4. Missing closing brackets (truncation)
+ * 5. Comments (// or /* style)
+ */
+function repairJSON(raw: string): string {
+	let s = raw.trim();
+
+	// Strip markdown code fence if present
+	s = s.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+
+	// Strip any leading text before the first {
+	const braceIdx = s.indexOf("{");
+	if (braceIdx > 0) s = s.slice(braceIdx);
+
+	// Remove single-line comments (// ...)
+	s = s.replace(/\/\/[^\n]*/g, "");
+
+	// Remove multi-line comments (/* ... */)
+	s = s.replace(/\/\*[\s\S]*?\*\//g, "");
+
+	// Replace single quotes at string boundaries with double quotes
+	// Match: 'key': or : 'value' patterns — conservative to avoid breaking embedded apostrophes
+	s = s.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'\s*:/g, '"$1":');
+	s = s.replace(/"\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, '": "$1"');
+
+	// Remove trailing commas before } or ]
+	s = s.replace(/,\s*([}\]])/g, "$1");
+
+	// Attempt to close unclosed structure: count braces
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	let lastBrace = -1;
+	for (let i = 0; i < s.length; i++) {
+		const ch = s[i];
+		if (escaped) { escaped = false; continue; }
+		if (ch === "\\" && inString) { escaped = true; continue; }
+		if (ch === '"' && !escaped) { inString = !inString; continue; }
+		if (inString) continue;
+		if (ch === "{" || ch === "[") { depth++; lastBrace = i; }
+		if (ch === "}" || ch === "]") { depth--; lastBrace = i; }
+	}
+
+	// If we're inside an unclosed string, add closing quote
+	if (inString) s += '"';
+
+	// Close unclosed braces/brackets in reverse order
+	if (depth > 0 && s.length > 0) {
+		const closers: string[] = [];
+		// Re-scan to determine which closers are needed
+		const stack: string[] = [];
+		let si = false;
+		let se = false;
+		for (let i = 0; i < s.length; i++) {
+			const ch = s[i];
+			if (se) { se = false; continue; }
+			if (ch === "\\" && si) { se = true; continue; }
+			if (ch === '"' && !se) { si = !si; continue; }
+			if (si) continue;
+			if (ch === "{") stack.push("}");
+			if (ch === "[") stack.push("]");
+			if (ch === "}" || ch === "]") {
+				if (stack.length > 0 && stack[stack.length - 1] === ch) stack.pop();
+			}
+		}
+		for (let i = stack.length - 1; i >= 0; i--) {
+			closers.push(stack[i]);
+		}
+		s += closers.join("");
+	}
+
+	return s;
+}
+
+/**
+ * Try to parse JSON with repair attempts.
+ * Returns parsed object or throws with details if all attempts fail.
+ */
+function tryParseJSON(raw: string, logPath: string): any {
+	// First attempt: direct parse
+	try {
+		return JSON.parse(raw);
+	} catch {
+		// Save original for debugging
+		fs.writeFileSync(logPath, raw, "utf-8");
+	}
+
+	// Second attempt: repair and parse
+	const repaired = repairJSON(raw);
+	try {
+		const parsed = JSON.parse(repaired);
+		return parsed;
+	} catch (e: any) {
+		// Save repaired version too for comparison
+		fs.writeFileSync(
+			logPath.replace(/\.txt$/, "-repaired.txt"),
+			repaired,
+			"utf-8",
+		);
+		throw new Error(
+			`JSON parse error after repair: ${e.message}. Raw output saved to ${logPath}`,
+		);
+	}
+}
+
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-spec-decompose", {
 		description: "Decompose a raw spec file into clean phase files",
@@ -26,20 +137,36 @@ export function register(pi: ExtensionAPI): void {
 			}
 
 			const specContent = fs.readFileSync(specPath, "utf-8");
-			const decomposePrompt = `Read this specification and decompose it into separate phase files. Output ONLY JSON, no other text.
 
+			// Truncate ultra-long specs to avoid LLM output truncation
+			const MAX_SPEC_LENGTH = 16000;
+			const truncated =
+				specContent.length > MAX_SPEC_LENGTH
+					? specContent.slice(0, MAX_SPEC_LENGTH) +
+						"\n\n[... TRUNCATED: spec too large, keeping first ~16KB for reliable decomposition]"
+					: specContent;
+
+			const decomposePrompt = `You are decomposing a technical specification into discrete, actionable phases for an autonomous coding agent.
+
+Output a valid JSON object with NO markdown wrapping, NO code fences, NO commentary before or after. Just raw JSON.
+
+The JSON must match this TypeScript type exactly:
 {
-  "phases": [
-    {
-      "name": "01_phase_name",
-      "summary": "brief objective",
-      "done_when": "acceptance criteria"
-    }
-  ],
-  "context": "Narrative, philosophy, out-of-scope, and operational notes stripped from phases."
+  "phases": Array<{ "name": string, "summary": string, "done_when": string }>,
+  "context": string
 }
 
-Raw spec:\n${specContent}`;
+Guidelines:
+- Each phase name should be prefixed with a 2-digit number and underscore (e.g., "01_wifi_lifecycle")
+- "summary" is a one-line objective
+- "done_when" is the acceptance criteria (1-2 sentences)
+- "context" captures everything else: narrative, philosophy, out-of-scope items, operational notes, hardware constraints — anything that doesn't belong in a single phase
+- Generate 6-15 phases depending on spec complexity
+- Do NOT truncate — produce the complete JSON
+- IMPORTANT: Escape all double-quotes inside strings with backslash
+
+Raw spec:
+${truncated}`;
 
 			cmdCtx.ui.setStatus("bake", t.fg("accent", "○ Decomposing spec..."));
 
@@ -85,21 +212,31 @@ Raw spec:\n${specContent}`;
 			try {
 				const output = await bake.runPrompt(decomposePrompt, "Decompose");
 
-				const jsonMatch = output.match(/\{[\s\S]*"phases"[\s\S]*\}/);
-				if (!jsonMatch) {
+				// Try to extract JSON from the output
+				let jsonStr = output.trim();
+
+				// Strip markdown code fences if the LLM wrapped the JSON despite instructions
+				jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+
+				// If output doesn't start with {, find the first { and use from there
+				const firstBrace = jsonStr.indexOf("{");
+				const lastBrace = jsonStr.lastIndexOf("}");
+				if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+					jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+				}
+
+				const rawLogPath = path.join(BAKE_BASE, ".bake", "decompose-raw-output.txt");
+
+				let decomposition: any;
+				try {
+					decomposition = tryParseJSON(jsonStr, rawLogPath);
+				} catch (parseErr: any) {
 					cmdCtx.ui.notify(
-						t.fg("error", "Decompose: no JSON in output — saved to .bake/decompose-raw-output.txt"),
+						t.fg("error", `Decompose: ${parseErr.message}`),
 						"info",
-					);
-					fs.writeFileSync(
-						path.join(BAKE_BASE, ".bake", "decompose-raw-output.txt"),
-						output,
-						"utf-8",
 					);
 					return;
 				}
-
-				const decomposition = JSON.parse(jsonMatch[0]);
 				if (!fs.existsSync(PHASES_DIR)) fs.mkdirSync(PHASES_DIR, { recursive: true });
 				for (const phase of decomposition.phases) {
 					const fileName = phase.name.replace(/[^a-zA-Z0-9_-]/g, "_") + ".md";
@@ -128,7 +265,7 @@ Raw spec:\n${specContent}`;
 				// ── Generate a README from the spec context (non-blocking) ──
 				if (decomposition.context) {
 					bakeCtx.loaderMsg = "Generating README...";
-					bake.onLoader?.(true, "Generating README...");
+					bake.setLoader(true, "Generating README...");
 
 					const readmePrompt = `You are a technical writer for an open-source project.
 Write a README.md for the project described below.
@@ -160,7 +297,7 @@ Write it clean, direct, no fluff.`;
 							cmdCtx.ui.notify(t.fg("warning", `README generation skipped: ${err.message}`), "info");
 						})
 						.finally(() => {
-							bake.onLoader?.(false, "");
+							bake.setLoader(false, "");
 						});
 				}
 			} catch (err: any) {

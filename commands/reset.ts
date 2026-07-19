@@ -19,6 +19,7 @@ export function register(pi: ExtensionAPI): void {
 					const ov = new Overlay(theme, { title: "⚠ Reset Bake Pipeline" });
 
 					ov.addBody(new Text(theme.fg("warning", "This will destroy:"), 1, 0));
+					ov.addBody(new Text(theme.fg("text", "  • All phase files"), 2, 0));
 					ov.addBody(new Text(theme.fg("text", "  • Workspace (build artifacts, node_modules)"), 2, 0));
 					ov.addBody(new Text(theme.fg("text", "  • Completed phase archives"), 2, 0));
 					ov.addBody(new Text(theme.fg("text", "  • Event log"), 2, 0));
@@ -28,7 +29,7 @@ export function register(pi: ExtensionAPI): void {
 					ov.addBody(new Spacer(1));
 					ov.addBody(
 						new Text(
-							theme.fg("muted", "Phase specs and archived specs are kept. Git is untouched."),
+							theme.fg("muted", "Git is untouched."),
 							1,
 							0,
 						),

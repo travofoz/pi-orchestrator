@@ -49,12 +49,15 @@ type AnimTheme = ThemeProxy;
 // ─── Widget component (Component interface — rendered by TUI, no setWidget spam) ───
 class BakeWidget implements Component {
 	private theme: AnimTheme;
-	private phaseList: string[];
 	private startTime: number;
 
-	constructor(theme: AnimTheme, phaseList: string[]) {
+	constructor(theme: AnimTheme) {
 		this.theme = theme;
-		this.phaseList = phaseList;
+		this.startTime = Date.now();
+	}
+
+	/** Reset scanner animation timer — called after bake-reset. */
+	reset(): void {
 		this.startTime = Date.now();
 	}
 
@@ -69,7 +72,7 @@ class BakeWidget implements Component {
 
 		const state = bakeCtx.bake?.stateSnapshot;
 		if (!state) return [];
-		const allPhases = this.phaseList;
+		const allPhases = getPhaseList();
 		if (allPhases.length === 0) {
 			return [t.fg("dim", "Bake idle. Use /bake-start to begin.")];
 		}
@@ -169,7 +172,6 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		const t = ctx.ui.theme;
-		const cachedPhaseList = getPhaseList();
 
 		// ── Working indicator: single red KITT scanner (60ms, independent of TUI render) ──
 		const RED_B = "\x1b[38;5;196m";
@@ -208,7 +210,9 @@ export default function (pi: ExtensionAPI) {
 		// No timer = zero render contention with overlays/settings.
 		ctx.ui.setWidget(WIDGET_ID, (tui: TUI, theme: Theme) => {
 			bakeCtx.requestWidgetRender = () => tui.requestRender();
-			return new BakeWidget(theme, cachedPhaseList);
+			const widget = new BakeWidget(theme);
+			bakeCtx.widgetRef = widget;
+			return widget;
 		});
 
 		// ── State change handler (simplified — no widget re-set, central timer handles render) ──
@@ -220,6 +224,10 @@ export default function (pi: ExtensionAPI) {
 					bakeCtx.closeLoader();
 					bakeCtx.closeLoader = null;
 				}
+			}
+			// Reset widget scanner timer on clean/idle transition (bake-reset)
+			if (s.status === "idle") {
+				bakeCtx.widgetRef?.reset();
 			}
 		});
 
