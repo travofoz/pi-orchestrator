@@ -7,7 +7,7 @@ import { bakeCtx, BAKE_BASE, PHASES_DIR, getPhaseList } from "./ctx.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-detail", {
-		description: "Browse all phases with spec details. j/k scroll, v cycle view, n/p phase, q close",
+		description: "Browse all phases — v cycle view, j/k scroll, n/p phase, q close",
 		handler: async (_args, cmdCtx) => {
 			const bake = bakeCtx.bake;
 			if (!bake) return;
@@ -52,121 +52,93 @@ export function register(pi: ExtensionAPI): void {
 				return { icon: "○", color: "dim" as const };
 			};
 
-			/** Build the content body for the selected phase — scrollable, line-wrapped. */
-			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50, mode: "phases" | "events" | "spec" = "spec", compact = false, eventOff = 0) => {
+			/** Build the content body — all sections, each truncated to fit. */
+			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50, mode: "phases" | "events" | "spec" = "spec", eventOff = 0) => {
 				const c = new Container();
 				const name = allPhases[idx];
 
-				// ── Phase list — skipped in compact mode ──
-				if (!compact) {
-					const inPhases = mode === "phases";
-					for (let i = 0; i < allPhases.length; i++) {
-						const p = allPhases[i];
-						const s = phaseStatus(p, st);
-						const isSelected = i === idx;
-						const marker = isSelected ? (inPhases ? theme.fg("accent", "▸") : theme.fg("dim", "▸")) : " ";
-						const icon = isSelected && inPhases ? theme.fg("accent", s.icon) : theme.fg(s.color, s.icon);
-						const label = isSelected
-							? (inPhases ? theme.fg("accent", theme.bold(p)) : theme.fg(s.color, theme.bold(p)))
-							: theme.fg(s.color, p);
-						c.addChild(new Text(`${marker} ${icon} ${label}`, 1, 0));
-					}
+				// ── Phase list (always shown, capped to available lines) ──
+				const inPhases = mode === "phases";
+				const maxPhases = Math.min(allPhases.length, Math.max(2, maxLines - 4));
+				for (let i = 0; i < maxPhases; i++) {
+					const p = allPhases[i];
+					const s = phaseStatus(p, st);
+					const isSelected = i === idx;
+					const marker = isSelected ? (inPhases ? theme.fg("accent", "▸") : theme.fg("dim", "▸")) : " ";
+					const icon = isSelected && inPhases ? theme.fg("accent", s.icon) : theme.fg(s.color, s.icon);
+					const label = isSelected
+						? (inPhases ? theme.fg("accent", theme.bold(p)) : theme.fg(s.color, theme.bold(p)))
+						: theme.fg(s.color, p);
+					c.addChild(new Text(`${marker} ${icon} ${label}`, 1, 0));
+				}
+				if (allPhases.length > maxPhases)
+					c.addChild(new Text(theme.fg("dim", `  ··· ${allPhases.length - maxPhases} more`), 1, 0));
 
-					// ── Event timeline for this phase (skipped in compact mode) ──
-					const allEvents = bake!.eventLog.tail(500);
-					const phaseEvents = allEvents.filter((e) => e.data?.phase === name || e.type === `phase_${name}`).reverse();
+				// ── Event log ──
+				const allEvents = bake!.eventLog.tail(500);
+				const phaseEvents = allEvents.filter((e) => e.data?.phase === name || e.type === `phase_${name}`).reverse();
 
-					const inEvents = mode === "events";
-					if (phaseEvents.length > 0) {
-						c.addChild(new Text(inEvents ? theme.fg("accent", theme.bold("Event Log")) : theme.fg("toolTitle", "Event Log"), 1, 0));
-						const visibleEvents = phaseEvents.slice(-12).slice(eventOff, eventOff + 8);
-						for (const e of visibleEvents) {
-							const time = new Date(e.ts).toLocaleTimeString("en-US", {
-								hour: "2-digit", minute: "2-digit", second: "2-digit",
-							});
-							let icon: string;
-							if (e.type.includes("pass") || e.type.includes("complete") || e.type === "phase_pass") {
-								icon = theme.fg("success", "✓");
-							} else if (
-								e.type.includes("fail") || e.type.includes("crash") ||
-								e.type.includes("error") || e.type.includes("breaker") ||
-								e.type === "pipeline_halted"
-							) {
-								icon = theme.fg("error", "✗");
-							} else if (e.type.includes("start")) {
-								icon = theme.fg("accent", "●");
-							} else if (e.type === "skip_phase") {
-								icon = theme.fg("warning", "⏸");
-							} else {
-								icon = theme.fg("dim", "·");
-							}
-							let detail = e.type;
-							if (e.data?.findings) detail += ` (${e.data.findings})`;
-							c.addChild(new Text(`  ${icon} ${theme.fg("dim", time)} ${theme.fg("muted", detail)}`, 0, 0));
-						}
-					} else {
-						c.addChild(new Text(theme.fg("dim", "  No events yet"), 1, 0));
+				const inEvents = mode === "events";
+				c.addChild(new Text(inEvents ? theme.fg("accent", theme.bold("Event Log")) : theme.fg("toolTitle", "Event Log"), 1, 0));
+				if (phaseEvents.length > 0) {
+					const maxEv = Math.min(phaseEvents.length, Math.max(1, maxLines - 6));
+					const evSlice = phaseEvents.slice(-12).slice(eventOff, eventOff + maxEv);
+					for (const e of evSlice) {
+						const time = new Date(e.ts).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+						const icon = e.type.includes("pass") || e.type.includes("complete") ? theme.fg("success", "✓")
+							: e.type.includes("fail") || e.type.includes("crash") || e.type.includes("error") ? theme.fg("error", "✗")
+							: e.type.includes("start") ? theme.fg("accent", "●")
+							: e.type === "skip_phase" ? theme.fg("warning", "⏸")
+							: theme.fg("dim", "·");
+						const evShort = e.type.replace("phase_", "").replace("pipeline_", "").slice(0, 18);
+						c.addChild(new Text(`  ${icon} ${theme.fg("dim", time)} ${theme.fg("muted", evShort)}`, 0, 0));
 					}
+				} else {
+					c.addChild(new Text(theme.fg("dim", "  no events"), 1, 0));
 				}
 
-				// ── Spec content (scrollable, line-wrapped) ──
+				// ── Spec content ──
 				const spec = readPhaseSpec(name);
-				const specLines = spec.split("\n").filter(Boolean);
-				// Wrap each line to content width, then flatten into contentLines
 				const contentLines: string[] = [];
 				let inSection = false;
-				for (const line of specLines) {
+				for (const line of spec.split("\n").filter(Boolean)) {
 					if (line.startsWith("## ")) {
 						inSection = true;
-						const heading = line.replace("## ", "");
-						// Wrap heading too
-						const wrapped = wrapTextWithAnsi(heading, contentW - 2);
-						for (const w of wrapped) contentLines.push(`  ${w}`);
+						const h = line.replace("## ", "");
+						for (const w of wrapTextWithAnsi(h, contentW - 2)) contentLines.push(`  ${w}`);
 					} else if (inSection && line.trim()) {
-						const indent = contentW > 40 ? 4 : 2;
-						const wrapped = wrapTextWithAnsi(line, contentW - indent);
-						for (const w of wrapped) contentLines.push(" ".repeat(indent) + w);
+						for (const w of wrapTextWithAnsi(line, contentW - 4)) contentLines.push("    " + w);
 					}
 				}
 
 				c.addChild(new Spacer(1));
-				c.addChild(new Text(theme.fg("toolTitle", "Spec"), 1, 0));
-				// Show scroll window from scrollOff
-				const total = contentLines.length;
-				const visible = contentLines.slice(scrollOff, scrollOff + maxLines);
-				for (const v of visible) {
-					c.addChild(new Text(theme.fg("muted", v), 0, 0));
-				}
-				// Scrollbar — shows position in all modes
-				if (total > maxLines) {
-					const pct = Math.round((scrollOff / Math.max(1, total - maxLines)) * 100);
-					const barW = Math.min(16, Math.max(4, contentW - 10));
+				c.addChild(new Text(mode === "spec" ? theme.fg("accent", theme.bold("Spec")) : theme.fg("toolTitle", "Spec"), 1, 0));
+				const specAvail = Math.max(1, maxLines - 6);
+				const visible = contentLines.slice(scrollOff, scrollOff + specAvail);
+				for (const v of visible) c.addChild(new Text(theme.fg("muted", v), 0, 0));
+
+				if (contentLines.length > specAvail) {
+					const pct = Math.round((scrollOff / Math.max(1, contentLines.length - specAvail)) * 100);
+					const barW = Math.min(8, Math.max(3, contentW - 8));
 					const thumb = Math.round((pct / 100) * (barW - 2));
 					const bar = "▓".repeat(Math.max(0, thumb)) + "░" + "▓".repeat(Math.max(0, barW - 2 - thumb));
-					c.addChild(new Text(
-						theme.fg("dim", `  ▐${bar}▌ ${scrollOff + 1}–${Math.min(scrollOff + maxLines, total)}/${total}`),
-						0, 0
-					));
+					c.addChild(new Text(theme.fg("dim", ` ▐${bar}▌ ${scrollOff + 1}–${Math.min(scrollOff + specAvail, contentLines.length)}/${contentLines.length}`), 0, 0));
 				}
 
 				return c;
 			};
 
-			// ── Custom UI with scroll support ──
+			// ── State ──
 			let scrollOffset = 0;
-
-			/** Count spec content lines for a phase (for scroll bounds). */
 			const specLineCount = (idx: number): number => {
 				const spec = readPhaseSpec(allPhases[idx]);
-				const lines = spec.split("\n").filter(Boolean);
 				let count = 0, inS = false;
-				for (const l of lines) {
+				for (const l of spec.split("\n").filter(Boolean)) {
 					if (l.startsWith("## ")) { inS = true; count++; }
 					else if (inS && l.trim()) { count++; }
 				}
 				return count;
 			};
-
 			let eventScroll = 0;
 			let mode: "phases" | "events" | "spec" = "spec";
 
@@ -180,25 +152,18 @@ export function register(pi: ExtensionAPI): void {
 
 					const makeOv = (sc: number) => {
 						if (ov) ov.dispose();
-						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: (tui.terminal.rows || 24) - 1 });
-						const avail = tui.terminal.rows || 24;
-						const compact = avail < 25; // skip phase list + events on small terminals
-						if (compact) mode = "spec"; // force spec-only in compact mode
-						const overH = compact ? 5 : 10;
-						const maxSpec = Math.max(3, avail - overH);
-						const specW = Math.max(20, (tui.terminal.columns || 80) - 8);
-						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode, compact, eventScroll));
+						const rows = tui.terminal.rows || 24;
+						const cols = tui.terminal.columns || 80;
+						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: Math.max(4, rows - 1) });
+						const maxSpec = Math.max(3, rows - 6);
+						const specW = Math.max(12, cols - 6);
+						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode, eventScroll));
 
-						// Footer legend key
-						const modeTag = compact
-							? theme.fg("dim", "[spec]")
-							: mode === "phases" ? theme.fg("accent", "[PHASES]")
-							: mode === "events" ? theme.fg("accent", "[EVENTS]")
-							: theme.fg("dim", "[spec]");
-						const modeAction = mode === "phases" ? "phase" : mode === "events" ? "events" : "scroll";
-						o.addFooter(compact
-							? `${modeTag}  j/k scroll  ·  n/p phase  ·  r retry  ·  s skip  ·  q close`
-							: `${modeTag}  v cycle  ·  j/k ${modeAction}  ·  n/p phase  ·  r retry  ·  s skip  ·  q close`);
+						const modeTag = mode === "phases" ? theme.fg("accent", "PHASES")
+							: mode === "events" ? theme.fg("accent", "EVENTS")
+							: "spec";
+						// Ultra-short legend that fits 40-col terminals: v:cyc j:dn k:up n/p:ph r:rt s:sk q:q
+						o.addFooter(`${modeTag} v:cyc j:dn k:up n/p:ph r:rt s:sk q:q`);
 						return o;
 					};
 
@@ -213,71 +178,42 @@ export function register(pi: ExtensionAPI): void {
 						render: (w: number) => ov.render(w),
 						invalidate: () => ov.invalidate(),
 						handleInput: (data: string) => {
-							// Cycle view: v / c / Tab
+							// Δ DEBUG — log every keypress to stderr (visible in ADB logcat / tmux status)
+							// process.stderr.write(`KEY: ${JSON.stringify(data)} ${data.charCodeAt(0) || ''}\n`);
+
+							// v / c: cycle view
 							if (data === "v" || data === "c") {
-								if ((tui.terminal.rows || 24) < 25) return;
 								const cycle: ("phases" | "events" | "spec")[] = ["phases", "events", "spec"];
-								const idx = cycle.indexOf(mode);
-								mode = cycle[(idx + 1) % cycle.length];
+								const ci = cycle.indexOf(mode);
+								mode = cycle[(ci + 1) % cycle.length];
 								rebuild();
-							// Scroll up / prev phase (in phases mode)
-							} else if (data === "k" || data === "\x1b[A") {
-								if (mode === "phases" && (tui.terminal.rows || 24) >= 25 && selectedIdx > 0) {
-									selectedIdx--;
-									scrollOffset = 0;
-									eventScroll = 0;
-									rebuild();
-								} else if (mode === "events" && (tui.terminal.rows || 24) >= 25 && eventScroll > 0) {
-									eventScroll--;
-									rebuild();
+							} else if (data === "k") {
+								if (mode === "phases" && selectedIdx > 0) {
+									selectedIdx--; scrollOffset = 0; eventScroll = 0; rebuild();
+								} else if (mode === "events" && eventScroll > 0) {
+									eventScroll--; rebuild();
 								} else if (scrollOffset > 0) {
-									scrollOffset--;
-									rebuild();
+									scrollOffset--; rebuild();
 								}
-							// Scroll down / next phase (in phases mode)
-							} else if (data === "j" || data === "\x1b[B") {
-								if (mode === "phases" && (tui.terminal.rows || 24) >= 25 && selectedIdx < allPhases.length - 1) {
-									selectedIdx++;
-									scrollOffset = 0;
-									eventScroll = 0;
-									rebuild();
-								} else if (mode === "events" && (tui.terminal.rows || 24) >= 25 && eventScroll < 6) {
-									eventScroll++;
-									rebuild();
+							} else if (data === "j") {
+								if (mode === "phases" && selectedIdx < allPhases.length - 1) {
+									selectedIdx++; scrollOffset = 0; eventScroll = 0; rebuild();
+								} else if (mode === "events" && eventScroll < 6) {
+									eventScroll++; rebuild();
 								} else {
-									const nlines = specLineCount(selectedIdx);
-									const maxScroll = Math.max(0, nlines - 10);
-									if (scrollOffset < maxScroll) {
-										scrollOffset++;
-										rebuild();
+									const total = specLineCount(selectedIdx);
+									if (scrollOffset < Math.max(0, total - 4)) {
+										scrollOffset++; rebuild();
 									}
 								}
-							// Next phase
-							} else if (data === "n") {
-								if (selectedIdx < allPhases.length - 1) {
-									selectedIdx++;
-									scrollOffset = 0;
-									eventScroll = 0;
-									rebuild();
-								}
-							// Prev phase
-							} else if (data === "p") {
-								if (selectedIdx > 0) {
-									selectedIdx--;
-									scrollOffset = 0;
-									eventScroll = 0;
-									rebuild();
-								}
-							// Retry
+							} else if (data === "n" && selectedIdx < allPhases.length - 1) {
+								selectedIdx++; scrollOffset = 0; eventScroll = 0; rebuild();
+							} else if (data === "p" && selectedIdx > 0) {
+								selectedIdx--; scrollOffset = 0; eventScroll = 0; rebuild();
 							} else if (data === "r") {
-								bake?.retryAttempt();
-								done(undefined);
-							// Skip phase
+								bake?.retryAttempt(); done(undefined);
 							} else if (data === "s") {
-								const phaseName = allPhases[selectedIdx];
-								bake?.skipPhase(phaseName);
-								done(undefined);
-							// Close
+								bake?.skipPhase(allPhases[selectedIdx]); done(undefined);
 							} else if (data === "q" || data === "\x1b") {
 								done(undefined);
 							}
