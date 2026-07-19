@@ -178,7 +178,7 @@ export default function (pi: ExtensionAPI) {
 			const cols = process.stdout.columns || 80;
 			const headerW = Math.max(30, cols - 4);
 			const elapsed = (Date.now() - widgetStartTime) / 1000;
-			const scanPos = Math.abs(Math.sin(elapsed * 0.17));
+			const scanPos = Math.abs(Math.sin(elapsed * 0.5));
 			const header = scannerTaper(headerW, scanPos, t, "bake");
 			const phaseLines = allPhases.map((phase) => {
 				if (state.completedPhases.includes(phase)) {

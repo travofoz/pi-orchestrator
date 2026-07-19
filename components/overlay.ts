@@ -36,42 +36,30 @@ function taperChars(width: number): string[] {
 	return chars;
 }
 
-const RED_BRIGHT = "\x1b[38;5;196m";
-const RED_MID = "\x1b[38;5;160m";
-const RED_DIM = "\x1b[38;5;88m";
 const GREEN_BRIGHT = "\x1b[38;5;119m";
 const GREEN_MID = "\x1b[38;5;108m";
 const GREEN_DIM = "\x1b[38;5;65m";
 const RESET = "\x1b[0m";
 const WHITE_FG = "\x1b[38;5;255m";
 
-/** Color a character based on distance from scanner center. */
-function scannerColor(ch: string, distFromScan: number, _leftSide: boolean): string {
-	// Scanner head uses red. Non-scanner zone uses green (both sides).
-	if (distFromScan <= 3) {
-		const red = distFromScan <= 1 ? RED_BRIGHT : distFromScan <= 2 ? RED_MID : RED_DIM;
-		return `${red}${ch}${RESET}`;
-	}
-	const green = distFromScan <= 5 ? GREEN_MID : GREEN_DIM;
-	return `${green}${ch}${RESET}`;
-}
-
-/** Build a single animated taper line with red scanner on green track.
- *  One bright spot sweeps from left to right and back (classic KITT). */
-export function scannerTaper(width: number, scanPos: number, t: ThemeProxy, title?: string): string {
+/** Build a mirrored green taper with two spots sweeping center→out→center.
+ *  All green — bright spots at the moving edges, dim in the middle. */
+export function scannerTaper(width: number, scanSpread: number, t: ThemeProxy, title?: string): string {
 	if (width <= 0) return "";
 	const chars = taperChars(width);
-	// scanPos 0..1: position of the single bright spot across the full width
-	const spot = Math.round(scanPos * (width - 1));
+	const ct = (width - 1) / 2;
+	// scanSpread 0 = center, 1 = edges
+	const leftScan = Math.round(ct - scanSpread * ct);
+	const rightScan = Math.round(ct + scanSpread * ct);
 
 	const colorLine = (lineChars: string[], offset: number): string => {
 		return lineChars.map((ch, i) => {
 			const absIdx = offset + i;
-			const dist = Math.abs(absIdx - spot);
-			if (dist <= 5) {
-				return scannerColor(ch, dist, false);
+			const minDist = Math.min(Math.abs(absIdx - leftScan), Math.abs(absIdx - rightScan));
+			if (minDist <= 5) {
+				const c = minDist <= 1 ? GREEN_BRIGHT : minDist <= 3 ? GREEN_MID : GREEN_DIM;
+				return `${c}${ch}${RESET}`;
 			}
-			// Non-scanner zone: green dim for all
 			return `${GREEN_DIM}${ch}${RESET}`;
 		}).join("");
 	};
@@ -118,11 +106,11 @@ export class Overlay {
 
 		if (this.tui) {
 			this.animTimer = setInterval(() => {
-				this.scanPos += this.scanDir * 0.02;
+				this.scanPos += this.scanDir * 0.06;
 				if (this.scanPos >= 1) { this.scanPos = 1; this.scanDir = -1; }
 				if (this.scanPos <= 0) { this.scanPos = 0; this.scanDir = 1; }
 				this.tui!.requestRender();
-			}, 50);
+			}, 40);
 		}
 	}
 
