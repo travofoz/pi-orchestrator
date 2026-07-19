@@ -112,13 +112,10 @@ export const bakeCtx: {
 	requestWidgetRender: (() => void) | null;
 	/** When true, BakeWidget.render() returns empty (no widget visible). Toggled by overlay commands. */
 	widgetHidden: boolean;
-	/** Gentle animation tick handle (8fps, skips when widgetHidden) */
-	animTimer: ReturnType<typeof setInterval> | null;
 } = {
 	bake: null,
 	closeLoader: null,
 	loaderMsg: "",
 	requestWidgetRender: null,
 	widgetHidden: false,
-	animTimer: null,
 };
