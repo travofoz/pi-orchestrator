@@ -1,13 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Container, Text, Spacer, wrapTextWithAnsi, visibleWidth, matchesKey } from "@earendil-works/pi-tui";
+import { Container, Text, Spacer, wrapTextWithAnsi, visibleWidth } from "@earendil-works/pi-tui";
 import { Overlay } from "../components/overlay.ts";
 import { bakeCtx, BAKE_BASE, PHASES_DIR, getPhaseList } from "./ctx.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-detail", {
-		description: "Browse all phases with spec details. ↑↓ navigate, r retry, s skip",
+		description: "Browse all phases with spec details. j/k scroll, v cycle view, n/p phase, q close",
 		handler: async (_args, cmdCtx) => {
 			const bake = bakeCtx.bake;
 			if (!bake) return;
@@ -57,7 +57,7 @@ export function register(pi: ExtensionAPI): void {
 				const c = new Container();
 				const name = allPhases[idx];
 
-				// ── Phase list — skipped in compact mode (title shows phase name, Tab+Browse navigates) ──
+				// ── Phase list — skipped in compact mode ──
 				if (!compact) {
 					const inPhases = mode === "phases";
 					for (let i = 0; i < allPhases.length; i++) {
@@ -137,8 +137,8 @@ export function register(pi: ExtensionAPI): void {
 				for (const v of visible) {
 					c.addChild(new Text(theme.fg("muted", v), 0, 0));
 				}
-				// Scrollbar — only in scroll mode, shows position
-				if (mode === "spec" && total > maxLines) {
+				// Scrollbar — shows position in all modes
+				if (total > maxLines) {
 					const pct = Math.round((scrollOff / Math.max(1, total - maxLines)) * 100);
 					const barW = Math.min(16, Math.max(4, contentW - 10));
 					const thumb = Math.round((pct / 100) * (barW - 2));
@@ -188,6 +188,8 @@ export function register(pi: ExtensionAPI): void {
 						const maxSpec = Math.max(3, avail - overH);
 						const specW = Math.max(20, (tui.terminal.columns || 80) - 8);
 						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode, compact, eventScroll));
+
+						// Footer legend key
 						const modeTag = compact
 							? theme.fg("dim", "[spec]")
 							: mode === "phases" ? theme.fg("accent", "[PHASES]")
@@ -195,8 +197,8 @@ export function register(pi: ExtensionAPI): void {
 							: theme.fg("dim", "[spec]");
 						const modeAction = mode === "phases" ? "phase" : mode === "events" ? "events" : "scroll";
 						o.addFooter(compact
-							? `${modeTag}  ↑↓ scroll  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`
-							: `${modeTag}  tab cycle  ·  ↑↓ ${modeAction}  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`);
+							? `${modeTag}  j/k scroll  ·  n/p phase  ·  r retry  ·  s skip  ·  q close`
+							: `${modeTag}  v cycle  ·  j/k ${modeAction}  ·  n/p phase  ·  r retry  ·  s skip  ·  q close`);
 						return o;
 					};
 
@@ -211,46 +213,37 @@ export function register(pi: ExtensionAPI): void {
 						render: (w: number) => ov.render(w),
 						invalidate: () => ov.invalidate(),
 						handleInput: (data: string) => {
-							if (matchesKey(data, "tab") || data === "\t" || data === "tab") {
-								// In compact mode, Tab is a no-op — only spec pane is available
+							// Cycle view: v / c / Tab
+							if (data === "v" || data === "c") {
 								if ((tui.terminal.rows || 24) < 25) return;
 								const cycle: ("phases" | "events" | "spec")[] = ["phases", "events", "spec"];
 								const idx = cycle.indexOf(mode);
 								mode = cycle[(idx + 1) % cycle.length];
 								rebuild();
-							} else if (matchesKey(data, "up") || data === "k") {
-								if (mode === "phases") {
-									if (selectedIdx > 0) {
-										selectedIdx--;
-										scrollOffset = 0;
-										eventScroll = 0;
-										rebuild();
-									}
-								} else if (mode === "events") {
-									if (eventScroll > 0) {
-										eventScroll--;
-										rebuild();
-									}
-								} else {
-									if (scrollOffset > 0) {
-										scrollOffset--;
-										rebuild();
-									}
+							// Scroll up / prev phase (in phases mode)
+							} else if (data === "k" || data === "\x1b[A") {
+								if (mode === "phases" && (tui.terminal.rows || 24) >= 25 && selectedIdx > 0) {
+									selectedIdx--;
+									scrollOffset = 0;
+									eventScroll = 0;
+									rebuild();
+								} else if (mode === "events" && (tui.terminal.rows || 24) >= 25 && eventScroll > 0) {
+									eventScroll--;
+									rebuild();
+								} else if (scrollOffset > 0) {
+									scrollOffset--;
+									rebuild();
 								}
-							} else if (matchesKey(data, "down") || data === "j") {
-								if (mode === "phases") {
-									if (selectedIdx < allPhases.length - 1) {
-										selectedIdx++;
-										scrollOffset = 0;
-										eventScroll = 0;
-										rebuild();
-									}
-								} else if (mode === "events") {
-									// Events limited to 12 — minimal scrolling needed
-									if (eventScroll < 6) {
-										eventScroll++;
-										rebuild();
-									}
+							// Scroll down / next phase (in phases mode)
+							} else if (data === "j" || data === "\x1b[B") {
+								if (mode === "phases" && (tui.terminal.rows || 24) >= 25 && selectedIdx < allPhases.length - 1) {
+									selectedIdx++;
+									scrollOffset = 0;
+									eventScroll = 0;
+									rebuild();
+								} else if (mode === "events" && (tui.terminal.rows || 24) >= 25 && eventScroll < 6) {
+									eventScroll++;
+									rebuild();
 								} else {
 									const nlines = specLineCount(selectedIdx);
 									const maxScroll = Math.max(0, nlines - 10);
@@ -259,28 +252,33 @@ export function register(pi: ExtensionAPI): void {
 										rebuild();
 									}
 								}
-							} else if (matchesKey(data, "n") || data === "n") {
+							// Next phase
+							} else if (data === "n") {
 								if (selectedIdx < allPhases.length - 1) {
 									selectedIdx++;
 									scrollOffset = 0;
 									eventScroll = 0;
 									rebuild();
 								}
-							} else if (matchesKey(data, "p") || data === "p") {
+							// Prev phase
+							} else if (data === "p") {
 								if (selectedIdx > 0) {
 									selectedIdx--;
 									scrollOffset = 0;
 									eventScroll = 0;
 									rebuild();
 								}
-							} else if (matchesKey(data, "r")) {
+							// Retry
+							} else if (data === "r") {
 								bake?.retryAttempt();
 								done(undefined);
-							} else if (matchesKey(data, "s")) {
+							// Skip phase
+							} else if (data === "s") {
 								const phaseName = allPhases[selectedIdx];
 								bake?.skipPhase(phaseName);
 								done(undefined);
-							} else if (matchesKey(data, "q") || matchesKey(data, "escape")) {
+							// Close
+							} else if (data === "q" || data === "\x1b") {
 								done(undefined);
 							}
 						},
