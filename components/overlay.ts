@@ -90,13 +90,15 @@ export class Overlay {
 	private body: Container;
 	private footerLines: string[];
 	private animStart: number;
+	private maxHeight: number;
 
-	constructor(theme: ThemeProxy, opts: { title?: string } = {}) {
+	constructor(theme: ThemeProxy, opts: { title?: string; maxHeight?: number } = {}) {
 		this.theme = theme;
 		this.title = opts.title ?? "";
 		this.body = new Container();
 		this.footerLines = [];
 		this.animStart = Date.now();
+		this.maxHeight = opts.maxHeight ?? 0;
 	}
 
 	addBody(component: { render: (w: number) => string[]; invalidate: () => void }): void {
@@ -148,6 +150,11 @@ export class Overlay {
 
 		// ── Bottom rule (mirrored scan) ──
 		result.push(scannerTaper(innerW, scanPos, t));
+
+		// ── Silent cap at maxHeight (no truncation marker) ──
+		if (this.maxHeight > 0 && result.length > this.maxHeight) {
+			result = result.slice(0, this.maxHeight);
+		}
 
 		// ── Pad with dark grey bg + margin ──
 		const leftPad = " ".repeat(margin);

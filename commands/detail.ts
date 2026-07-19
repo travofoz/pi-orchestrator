@@ -53,56 +53,58 @@ export function register(pi: ExtensionAPI): void {
 			};
 
 			/** Build the content body for the selected phase — scrollable, line-wrapped. */
-			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50, mode: "browse" | "scroll" = "scroll") => {
+			const buildBody = (theme: any, idx: number, st: typeof state, scrollOff = 0, maxLines = 20, contentW = 50, mode: "browse" | "scroll" = "scroll", compact = false) => {
 				const c = new Container();
 				const name = allPhases[idx];
 
-				// ── Phase list (compact) — cursor in browse mode, dimmed in scroll mode ──
-				const inBrowse = mode === "browse";
-				for (let i = 0; i < allPhases.length; i++) {
-					const p = allPhases[i];
-					const s = phaseStatus(p, st);
-					const isSelected = i === idx;
-					const marker = isSelected ? (inBrowse ? theme.fg("accent", "▸") : theme.fg("dim", "▸")) : " ";
-					const icon = isSelected && inBrowse ? theme.fg("accent", s.icon) : theme.fg(s.color, s.icon);
-					const label = isSelected
-						? (inBrowse ? theme.fg("accent", theme.bold(p)) : theme.fg(s.color, theme.bold(p)))
-						: theme.fg(s.color, p);
-					c.addChild(new Text(`${marker} ${icon} ${label}`, 1, 0));
-				}
-
-				// ── Event timeline for this phase ──
-				const allEvents = bake!.eventLog.tail(500);
-				const phaseEvents = allEvents.filter((e) => e.data?.phase === name || e.type === `phase_${name}`).reverse();
-
-				if (phaseEvents.length > 0) {
-					c.addChild(new Text(theme.fg("toolTitle", "Event Log"), 1, 0));
-					for (const e of phaseEvents.slice(-12)) {
-						const time = new Date(e.ts).toLocaleTimeString("en-US", {
-							hour: "2-digit", minute: "2-digit", second: "2-digit",
-						});
-						let icon: string;
-						if (e.type.includes("pass") || e.type.includes("complete") || e.type === "phase_pass") {
-							icon = theme.fg("success", "✓");
-						} else if (
-							e.type.includes("fail") || e.type.includes("crash") ||
-							e.type.includes("error") || e.type.includes("breaker") ||
-							e.type === "pipeline_halted"
-						) {
-							icon = theme.fg("error", "✗");
-						} else if (e.type.includes("start")) {
-							icon = theme.fg("accent", "●");
-						} else if (e.type === "skip_phase") {
-							icon = theme.fg("warning", "⏸");
-						} else {
-							icon = theme.fg("dim", "·");
-						}
-						let detail = e.type;
-						if (e.data?.findings) detail += ` (${e.data.findings})`;
-						c.addChild(new Text(`  ${icon} ${theme.fg("dim", time)} ${theme.fg("muted", detail)}`, 0, 0));
+				// ── Phase list — skipped in compact mode (title shows phase name, Tab+Browse navigates) ──
+				if (!compact) {
+					const inBrowse = mode === "browse";
+					for (let i = 0; i < allPhases.length; i++) {
+						const p = allPhases[i];
+						const s = phaseStatus(p, st);
+						const isSelected = i === idx;
+						const marker = isSelected ? (inBrowse ? theme.fg("accent", "▸") : theme.fg("dim", "▸")) : " ";
+						const icon = isSelected && inBrowse ? theme.fg("accent", s.icon) : theme.fg(s.color, s.icon);
+						const label = isSelected
+							? (inBrowse ? theme.fg("accent", theme.bold(p)) : theme.fg(s.color, theme.bold(p)))
+							: theme.fg(s.color, p);
+						c.addChild(new Text(`${marker} ${icon} ${label}`, 1, 0));
 					}
-				} else {
-					c.addChild(new Text(theme.fg("dim", "  No events yet"), 1, 0));
+
+					// ── Event timeline for this phase (skipped in compact mode) ──
+					const allEvents = bake!.eventLog.tail(500);
+					const phaseEvents = allEvents.filter((e) => e.data?.phase === name || e.type === `phase_${name}`).reverse();
+
+					if (phaseEvents.length > 0) {
+						c.addChild(new Text(theme.fg("toolTitle", "Event Log"), 1, 0));
+						for (const e of phaseEvents.slice(-12)) {
+							const time = new Date(e.ts).toLocaleTimeString("en-US", {
+								hour: "2-digit", minute: "2-digit", second: "2-digit",
+							});
+							let icon: string;
+							if (e.type.includes("pass") || e.type.includes("complete") || e.type === "phase_pass") {
+								icon = theme.fg("success", "✓");
+							} else if (
+								e.type.includes("fail") || e.type.includes("crash") ||
+								e.type.includes("error") || e.type.includes("breaker") ||
+								e.type === "pipeline_halted"
+							) {
+								icon = theme.fg("error", "✗");
+							} else if (e.type.includes("start")) {
+								icon = theme.fg("accent", "●");
+							} else if (e.type === "skip_phase") {
+								icon = theme.fg("warning", "⏸");
+							} else {
+								icon = theme.fg("dim", "·");
+							}
+							let detail = e.type;
+							if (e.data?.findings) detail += ` (${e.data.findings})`;
+							c.addChild(new Text(`  ${icon} ${theme.fg("dim", time)} ${theme.fg("muted", detail)}`, 0, 0));
+						}
+					} else {
+						c.addChild(new Text(theme.fg("dim", "  No events yet"), 1, 0));
+					}
 				}
 
 				// ── Spec content (scrollable, line-wrapped) ──
@@ -175,11 +177,13 @@ export function register(pi: ExtensionAPI): void {
 
 					const makeOv = (sc: number) => {
 						if (ov) ov.dispose();
-						const o = new Overlay(theme, { title: allPhases[selectedIdx] });
-						const overH = 10;
-						const maxSpec = Math.max(3, (tui.terminal.rows || 24) - overH);
+						const o = new Overlay(theme, { title: allPhases[selectedIdx], maxHeight: (tui.terminal.rows || 24) - 1 });
+						const avail = tui.terminal.rows || 24;
+						const compact = avail < 25; // skip phase list + events on small terminals
+						const overH = compact ? 5 : 10;
+						const maxSpec = Math.max(3, avail - overH);
 						const specW = Math.max(20, (tui.terminal.columns || 80) - 8);
-						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode));
+						o.addBody(buildBody(theme, selectedIdx, bake!.stateSnapshot, sc, maxSpec, specW, mode, compact));
 						const modeTag = mode === "browse" ? theme.fg("accent", "[BROWSE]") : theme.fg("dim", "[scroll]");
 						o.addFooter(`${modeTag}  tab switch  ·  ↑↓ ${mode === "browse" ? "phase" : "scroll"}  ·  n/p phase  ·  r retry  ·  s skip  ·  esc/q close`);
 						return o;
