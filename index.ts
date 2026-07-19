@@ -92,9 +92,13 @@ export default function (pi: ExtensionAPI) {
 		const t = ctx.ui.theme;
 
 		// ── Responsive frame builder for working indicator ──
-		// Just the braille scanner — no label, no text. Pi's Loader already appends message.
+		// Centered braille scanner with "working" label in middle.
+		// Frame width = cols - 1 so Loader's trailing space doesn't cause wrap.
 		const buildWorkingFrames = (cols: number) => {
-			const W = Math.max(8, Math.floor((cols - 4) / 2)); // braille cells per side, full width
+			const avail = cols - 1; // Loader adds a space after the frame
+			const label = "⚙ working";
+			const lw = visibleWidth(label);
+			const W = Math.max(6, Math.floor((avail - lw - 2) / 2)); // cells each side
 			const B = ["⠀", "⡀", "⡠", "⡦", "⡶", "⣶", "⣿"];
 			const frames: string[] = [];
 			const makeFrame = (spreadPos: number) => {
@@ -104,8 +108,8 @@ export default function (pi: ExtensionAPI) {
 					const cells: string[] = [];
 					for (let i = 0; i < len; i++) {
 						const dist = Math.abs(i - pos);
-						const centerFactor = 1 - Math.abs(pos - (len - 1) / 2) / ((len - 1) / 2);
-						const spread = 2 + Math.floor(centerFactor * 4);
+						const cf = 1 - Math.abs(pos - (len - 1) / 2) / ((len - 1) / 2);
+						const spread = 2 + Math.floor(cf * 4);
 						const b = Math.max(0, Math.min(6, spread - dist));
 						cells.push(t.fg(
 							b >= 5 ? "accent" : b >= 3 ? "muted" : b >= 1 ? "dim" : "muted",
@@ -115,12 +119,11 @@ export default function (pi: ExtensionAPI) {
 					return cells.join("");
 				};
 				const leftScan = buildSide(leftPos, W);
-				// Mirror of left scan, not re-computed — reuse same cells reversed
 				const rightScan = buildSide(rightPos, W);
-				const content = leftScan + "  " + rightScan;
+				const content = leftScan + " " + t.fg("accent", label) + " " + rightScan;
 				const cw = visibleWidth(content);
-				const pad = Math.max(0, Math.floor((cols - cw) / 2));
-				return " ".repeat(pad) + content + " ".repeat(cols - pad - cw);
+				const pad = Math.max(0, Math.floor((avail - cw) / 2));
+				return " ".repeat(pad) + content + " ".repeat(avail - pad - cw);
 			};
 			for (let p = 0; p < W; p++) frames.push(makeFrame(p));
 			for (let p = W - 2; p >= 0; p--) frames.push(makeFrame(p));
@@ -128,15 +131,15 @@ export default function (pi: ExtensionAPI) {
 		};
 
 		// ── Initial working indicator at current terminal width ──
-		// Clear the message text — pi's Loader appends it, we just want the animation
-		ctx.ui.setWorkingMessage("");
+		ctx.ui.setWorkingMessage(""); // suppress pi's appended message (label is in the frame)
 		const initCols = process.stdout.columns || 80;
 		ctx.ui.setWorkingIndicator({ frames: buildWorkingFrames(initCols), intervalMs: 60 });
 
-		// ── Widget header scanner animation ──
+		// ── Widget header scanner animation (clear old on reload) ──
 		let widgetScanPos = 0;
 		let widgetScanDir = 1;
-		const widgetAnimTimer = setInterval(() => {
+		if (bakeCtx.widgetAnimTimer) clearInterval(bakeCtx.widgetAnimTimer);
+		bakeCtx.widgetAnimTimer = setInterval(() => {
 			widgetScanPos += widgetScanDir * 0.025;
 			if (widgetScanPos >= 1) { widgetScanPos = 1; widgetScanDir = -1; }
 			if (widgetScanPos <= 0) { widgetScanPos = 0; widgetScanDir = 1; }

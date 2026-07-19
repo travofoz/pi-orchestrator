@@ -109,9 +109,11 @@ export const bakeCtx: {
 	requestWidgetRender: (() => void) | null;
 	closeLoader: (() => void) | null;
 	loaderMsg: string;
+	widgetAnimTimer: ReturnType<typeof setInterval> | null;
 } = {
 	bake: null,
 	requestWidgetRender: null,
 	closeLoader: null,
 	loaderMsg: "",
+	widgetAnimTimer: null,
 };
