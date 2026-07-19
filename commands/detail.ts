@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Container, Text, Spacer, wrapTextWithAnsi, visibleWidth } from "@earendil-works/pi-tui";
+import { Container, Text, Spacer, wrapTextWithAnsi, visibleWidth, matchesKey } from "@earendil-works/pi-tui";
 import { Overlay } from "../components/overlay.ts";
 import { bakeCtx, BAKE_BASE, PHASES_DIR, getPhaseList } from "./ctx.ts";
 
@@ -211,14 +211,14 @@ export function register(pi: ExtensionAPI): void {
 						render: (w: number) => ov.render(w),
 						invalidate: () => ov.invalidate(),
 						handleInput: (data: string) => {
-							if (data === "tab" || data === "\t") {
+							if (matchesKey(data, "tab")) {
 								// Skip cycling in compact mode — only spec is available
 								if ((tui.terminal.rows || 24) < 25) return;
 								const cycle: ("phases" | "events" | "spec")[] = ["phases", "events", "spec"];
 								const idx = cycle.indexOf(mode);
 								mode = cycle[(idx + 1) % cycle.length];
 								rebuild();
-							} else if (data === "up" || data === "k") {
+							} else if (matchesKey(data, "up") || data === "k") {
 								if (mode === "phases") {
 									if (selectedIdx > 0) {
 										selectedIdx--;
@@ -237,7 +237,7 @@ export function register(pi: ExtensionAPI): void {
 										rebuild();
 									}
 								}
-							} else if (data === "down" || data === "j") {
+							} else if (matchesKey(data, "down") || data === "j") {
 								if (mode === "phases") {
 									if (selectedIdx < allPhases.length - 1) {
 										selectedIdx++;
@@ -259,28 +259,28 @@ export function register(pi: ExtensionAPI): void {
 										rebuild();
 									}
 								}
-							} else if (data === "n") {
+							} else if (matchesKey(data, "n") || data === "n") {
 								if (selectedIdx < allPhases.length - 1) {
 									selectedIdx++;
 									scrollOffset = 0;
 									eventScroll = 0;
 									rebuild();
 								}
-							} else if (data === "p") {
+							} else if (matchesKey(data, "p") || data === "p") {
 								if (selectedIdx > 0) {
 									selectedIdx--;
 									scrollOffset = 0;
 									eventScroll = 0;
 									rebuild();
 								}
-							} else if (data === "r") {
+							} else if (matchesKey(data, "r")) {
 								bake?.retryAttempt();
 								done(undefined);
-							} else if (data === "s") {
+							} else if (matchesKey(data, "s")) {
 								const phaseName = allPhases[selectedIdx];
 								bake?.skipPhase(phaseName);
 								done(undefined);
-							} else if (data === "q" || data === "escape" || data === "\x1b") {
+							} else if (matchesKey(data, "q") || matchesKey(data, "escape")) {
 								done(undefined);
 							}
 						},
