@@ -152,16 +152,19 @@ Output a valid JSON object with NO markdown wrapping, NO code fences, NO comment
 
 The JSON must match this TypeScript type exactly:
 {
-  "phases": Array<{ "name": string, "summary": string, "done_when": string }>,
+  "phases": Array<{ "id": string, "name": string, "summary": string, "done_when": string, "depends_on": string[] }>,
   "context": string
 }
 
 Guidelines:
-- Each phase name should be prefixed with a 2-digit number and underscore (e.g., "01_wifi_lifecycle")
+- "id" is unique and short (e.g., "02_wifi_state_machine")
+- "name" is the human-readable display name (e.g., "WiFi State Machine")
 - "summary" is a one-line objective
 - "done_when" is the acceptance criteria (1-2 sentences)
+- "depends_on" is an array of phase IDs that must complete before this phase starts. Empty array means no dependencies (can run immediately). Use this to express the build order — infrastructure phases have no deps, dependent features reference their prerequisites.
 - "context" captures everything else: narrative, philosophy, out-of-scope items, operational notes, hardware constraints — anything that doesn't belong in a single phase
-- Generate 6-15 phases depending on spec complexity
+- Generate 6-15 phases depending on spec complexity. Group independent phases so they can run in parallel.
+- If phases 2a and 2b don't depend on each other but both depend on phase 1, set depends_on: ["phase_1"] on both — the system will run them concurrently.
 - Do NOT truncate — produce the complete JSON
 - IMPORTANT: Escape all double-quotes inside strings with backslash
 
@@ -238,10 +241,28 @@ ${truncated}`;
 					return;
 				}
 				if (!fs.existsSync(PHASES_DIR)) fs.mkdirSync(PHASES_DIR, { recursive: true });
+
+				// Write DAG manifest for the state machine
+				const dagManifest = decomposition.phases.map((p: any) => ({
+					id: p.id || p.name.replace(/[^a-zA-Z0-9_-]/g, "_"),
+					name: p.name,
+					depends_on: p.depends_on || [],
+				}));
+				fs.writeFileSync(
+					path.join(PHASES_DIR, "dag.json"),
+					JSON.stringify(dagManifest, null, 2),
+					"utf-8",
+				);
+
 				for (const phase of decomposition.phases) {
-					const fileName = phase.name.replace(/[^a-zA-Z0-9_-]/g, "_") + ".md";
-					const content = `# ${phase.name}\n\n## Objective\n${phase.summary}\n\n## Done When\n${phase.done_when}\n`;
+					const phaseId = phase.id || phase.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+					const fileName = phaseId + ".md";
+					const deps = (phase.depends_on || []).length > 0
+						? `\n## Depends On\n${phase.depends_on.join(", ")}\n`
+						: "\n## Depends On\n(none)\n";
+					const content = `# ${phase.name}\n\n## Phase ID\n${phaseId}\n${deps}## Objective\n${phase.summary}\n\n## Done When\n${phase.done_when}\n`;
 					fs.writeFileSync(path.join(PHASES_DIR, fileName), content, "utf-8");
+				}
 				}
 				if (decomposition.context) {
 					fs.writeFileSync(
