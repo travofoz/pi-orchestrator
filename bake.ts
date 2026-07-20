@@ -22,6 +22,10 @@ export interface PhaseSpec {
 	name: string;
 	filePath: string;
 	content: string;
+	/** Unique ID from phase file metadata or dag.json, falls back to name */
+	phaseId: string;
+	/** Phase IDs this phase depends on (empty = no deps, runnable immediately) */
+	dependsOn: string[];
 }
 
 export interface BakeState {
@@ -32,6 +36,8 @@ export interface BakeState {
 	completedPhases: string[];
 	skippedPhases: string[];
 	pendingSteer: string | null;
+	/** Phase names currently being executed (for UI with parallel phases) */
+	activePhases: string[];
 }
 
 export interface PhaseResult {
@@ -146,6 +152,7 @@ export class Bake {
 			completedPhases: [],
 			skippedPhases: [],
 			pendingSteer: null,
+			activePhases: [],
 		};
 		this.emitState();
 	}
@@ -154,7 +161,10 @@ export class Bake {
 		if (fs.existsSync(this.stateFile)) {
 			try {
 				const raw = fs.readFileSync(this.stateFile, "utf-8");
-				return JSON.parse(raw) as BakeState;
+				const parsed = JSON.parse(raw) as BakeState;
+				// Ensure activePhases field exists on deserialized old state
+				if (!parsed.activePhases) parsed.activePhases = [];
+				return parsed;
 			} catch {
 				// Corrupted state — start fresh
 			}
@@ -167,6 +177,7 @@ export class Bake {
 			completedPhases: [],
 			skippedPhases: [],
 			pendingSteer: null,
+			activePhases: [],
 		};
 	}
 
@@ -193,20 +204,72 @@ export class Bake {
 		this._onStateChange?.(this.state);
 	}
 
+	/** Load dag.json manifest and return a map of phaseId → dependsOn. */
+	private loadDagManifest(): Map<string, string[]> {
+		const dagPath = path.join(this.phasesDir, "dag.json");
+		if (!fs.existsSync(dagPath)) return new Map();
+		try {
+			const data: Array<{ id: string; depends_on: string[] }> = JSON.parse(
+				fs.readFileSync(dagPath, "utf-8"),
+			);
+			return new Map(data.map((entry) => [entry.id, entry.depends_on || []]));
+		} catch {
+			return new Map();
+		}
+	}
+
 	private getPendingPhases(): PhaseSpec[] {
 		if (!fs.existsSync(this.phasesDir)) return [];
+		const dag = this.loadDagManifest();
 		return fs
 			.readdirSync(this.phasesDir)
-			.filter((f) => f.endsWith(".md"))
+			.filter((f) => f.endsWith(".md") && f !== "dag.json")
 			.sort()
 			.map((file) => {
 				const filePath = path.join(this.phasesDir, file);
-				return {
-					name: file.replace(/\.md$/, ""),
-					filePath,
-					content: fs.readFileSync(filePath, "utf-8"),
-				};
+				const content = fs.readFileSync(filePath, "utf-8");
+				const name = file.replace(/\.md$/, "");
+
+				// Parse Phase ID from file metadata
+				const idMatch = content.match(/^## Phase ID\n([^\n]+)/m);
+				const phaseId = idMatch ? idMatch[1].trim() : name;
+
+				// Get dependencies from DAG manifest or phase content
+				let dependsOn: string[] = [];
+				if (dag.has(phaseId)) {
+					dependsOn = dag.get(phaseId)!;
+				} else {
+					const depsMatch = content.match(/^## Depends On\n([^\n]+)/m);
+					if (depsMatch) {
+						dependsOn = depsMatch[1]
+							.split(",")
+							.map((s) => s.trim())
+							.filter((s) => s !== "(none)" && s.length > 0);
+					}
+				}
+
+				return { name, filePath, content, phaseId, dependsOn };
 			});
+	}
+
+	/**
+	 * Compute the next batch of phases whose dependencies are all satisfied.
+	 * Returns phases in a deterministic order.
+	 */
+	private getReadyPhases(
+		phases: PhaseSpec[],
+		completed: Set<string>,
+		skipped: Set<string>,
+	): PhaseSpec[] {
+		const ready: PhaseSpec[] = [];
+		for (const p of phases) {
+			if (completed.has(p.phaseId) || skipped.has(p.phaseId)) continue;
+			const depsMet = p.dependsOn.every(
+				(d) => completed.has(d) || skipped.has(d),
+			);
+			if (depsMet) ready.push(p);
+		}
+		return ready;
 	}
 
 	/** Build the ExecutorDeps object from current Bake state. */
@@ -282,7 +345,6 @@ export class Bake {
 	async runPipeline(): Promise<void> {
 		// Start the RPC agent (idempotent)
 		this.rpcAgent.start();
-
 		this.log.open();
 		this.log.append("pipeline_start", {});
 
@@ -297,111 +359,181 @@ export class Bake {
 		}
 
 		try {
-			for (const phase of phases) {
-				// Skip already-completed phases
-				if (this.state.completedPhases.includes(phase.name)) continue;
-				if (this.state.skippedPhases.includes(phase.name)) continue;
+			const completed = new Set(this.state.completedPhases);
+			const skipped = new Set(this.state.skippedPhases);
 
-				const result = await this.runPhase(phase);
-				if (result.passed === "paused") {
-					// User paused — exit pipeline cleanly, don't mark as failed
-					this.log.append("pipeline_paused", { phase: phase.name });
-					// Don't close agent or log — resume() will restart
+			// DAG scheduler: run ready phases concurrently in batches
+			while (completed.size + skipped.size < phases.length) {
+				// Check pause before each batch
+				if (this.state.status === "paused") {
+					this.log.append("pipeline_paused", {});
 					return;
 				}
-				if (!result.passed) {
+
+				const ready = this.getReadyPhases(phases, completed, skipped);
+				if (ready.length === 0) {
+					// No ready phases but still pending = deadlock
 					this.state.status = "failed";
 					this.emitState();
-					this.log.append("pipeline_halted", {
-						phase: phase.name,
-						reason: "circuit_breaker",
-					});
-					this.log.close();
-					this.rpcAgent.close();
+					this.log.append("pipeline_deadlock", {});
+					return;
+				}
+
+				// Update state for UI
+				this.state.activePhases = ready.map((p) => p.name);
+				this.state.currentPhase = ready.length === 1 ? ready[0].name : null;
+				this.state.status = "running";
+				this.emitState();
+				this._onStatus?.(`Active: ${ready.map((p) => p.name).join(", ")}`);
+
+				this.log.append("batch_start", {
+					phases: ready.map((p) => p.phaseId),
+					count: ready.length,
+				});
+
+				// Run all ready phases concurrently
+				const results = await Promise.allSettled(
+					ready.map((p) => this.runPhaseIsolated(p)),
+				);
+
+				let anyFailed = false;
+				for (let i = 0; i < results.length; i++) {
+					const r = results[i];
+					const p = ready[i];
+
+					if (r.status === "rejected") {
+						anyFailed = true;
+						this.log.append("phase_crashed", {
+							phase: p.phaseId,
+							error: String(r.reason),
+						});
+						continue;
+					}
+
+					const result = r.value;
+					if (result.passed === "paused") {
+						this.log.append("pipeline_paused", { phase: p.phaseId });
+						return;
+					}
+					if (result.passed === true) {
+						completed.add(p.phaseId);
+						this.state.completedPhases.push(p.name);
+						this.log.append("phase_pass", { phase: p.phaseId });
+						this.archivePhaseFile(p);
+					} else {
+						anyFailed = true;
+						this.log.append("phase_failed", {
+							phase: p.phaseId,
+							attempts: result.attempts,
+						});
+					}
+				}
+
+				if (anyFailed) {
+					this.state.status = "failed";
+					this.state.activePhases = [];
+					this.emitState();
+					this.log.append("pipeline_halted", { reason: "circuit_breaker" });
 					return;
 				}
 			}
 
 			this.state.status = "done";
+			this.state.activePhases = [];
 			this.emitState();
 			this.log.append("pipeline_complete", {});
 		} finally {
+			this.state.activePhases = [];
+			this.emitState();
 			this.log.close();
 			this.rpcAgent.close();
 		}
 	}
 
 	/**
-	 * Run a single phase through executor → audit → remediation loop.
+	 * Run a single phase with isolated state — no writes to this.state.
+	 * Audits run in parallel via Promise.all.
 	 */
-	private async runPhase(phase: PhaseSpec): Promise<PhaseResult> {
-		this.state.currentPhase = phase.name;
-		this.state.currentAttempt = 0;
-		this.state.status = "running";
-		this.emitState();
-		this.log.append("phase_start", { phase: phase.name });
+	private async runPhaseIsolated(phase: PhaseSpec): Promise<PhaseResult> {
+		this.log.append("phase_start", { phase: phase.phaseId });
 		this._onStatus?.(`Phase: ${phase.name}`);
 
 		const allFindings: AuditFinding[] = [];
 		const deps = this.executorDeps();
+		let attempt = 0;
 
-		while (this.state.currentAttempt < this.state.maxAttempts) {
+		while (attempt < this.state.maxAttempts) {
 			// Check for pause
 			if (this.state.status === "paused") {
 				this.log.append("phase_paused", {
-					phase: phase.name,
-					attempt: this.state.currentAttempt,
+					phase: phase.phaseId,
+					attempt,
 				});
 				return {
 					phase: phase.name,
 					passed: "paused",
-					attempts: this.state.currentAttempt,
+					attempts: attempt,
 					findings: allFindings,
 				};
 			}
 
 			this.log.append("attempt_start", {
-				phase: phase.name,
-				attempt: this.state.currentAttempt,
+				phase: phase.phaseId,
+				attempt,
 			});
 
 			// --- EXECUTOR ---
 			const executorPassed = await runExecutor(
 				phase,
-				this.state.currentAttempt,
+				attempt,
 				this.state.pendingSteer,
 				deps,
 			);
 			if (!executorPassed) {
-				this.state.currentAttempt++;
-				this.emitState();
+				attempt++;
 				this.log.append("attempt_executor_failed", {
-					phase: phase.name,
-					attempt: this.state.currentAttempt,
+					phase: phase.phaseId,
+					attempt,
 				});
 				continue;
 			}
 
-			// --- STRUCTURAL AUDIT (ast-grep) ---
-			this.log.append("audit_structural_start", { phase: phase.name });
-			this._onStatus?.(`Audit (structural): ${phase.name}`);
-			const structuralFindings = await runStructuralAudit(
-				this.workspaceDir,
-				this.rulesDir,
-				this.getEnabledRules(),
-			);
+			// --- PARALLEL AUDITS (structural + semantic concurrent) ---
+			this._onStatus?.(`Auditing: ${phase.name}`);
+			this.log.append("audit_parallel_start", { phase: phase.phaseId });
 
-			if (structuralFindings.length > 0) {
-				allFindings.push(...structuralFindings);
-				this.log.append("audit_structural_fail", {
-					phase: phase.name,
-					findings: structuralFindings.length,
+			const [structuralFindings, semanticFindings] = await Promise.all([
+				runStructuralAudit(
+					this.workspaceDir,
+					this.rulesDir,
+					this.getEnabledRules(),
+				),
+				runSemanticAudit({
+					workspaceDir: this.workspaceDir,
+					rpcAgent: this.rpcAgent,
+					onStatus: (msg) => this._onStatus?.(msg),
+					onLoader: (show, msg) => this._onLoader?.(show, msg),
+					log: this.log,
+				}),
+			]);
+
+			const combinedFindings = [
+				...structuralFindings,
+				...semanticFindings,
+			];
+
+			if (combinedFindings.length > 0) {
+				allFindings.push(...combinedFindings);
+				this.log.append("audit_parallel_fail", {
+					phase: phase.phaseId,
+					structural: structuralFindings.length,
+					semantic: semanticFindings.length,
 				});
-				// Fast-fail to remediation — no need for semantic audit
+
 				const remediated = await runRemediation(
 					phase,
 					allFindings,
-					this.state.currentAttempt,
+					attempt,
 					this.state.maxAttempts,
 					deps,
 				);
@@ -409,78 +541,39 @@ export class Bake {
 					return {
 						phase: phase.name,
 						passed: false,
-						attempts: this.state.currentAttempt + 1,
+						attempts: attempt + 1,
 						findings: allFindings,
 					};
 				}
-				this.state.currentAttempt++;
-				this.emitState();
-				continue;
-			}
-
-			this.log.append("audit_structural_pass", { phase: phase.name });
-
-			// --- SEMANTIC AUDIT (LLM) ---
-			this.log.append("audit_semantic_start", { phase: phase.name });
-			const semanticFindings = await runSemanticAudit({
-				workspaceDir: this.workspaceDir,
-				rpcAgent: this.rpcAgent,
-				onStatus: (msg) => this._onStatus?.(msg),
-				onLoader: (show, msg) => this._onLoader?.(show, msg),
-				log: this.log,
-			});
-
-			if (semanticFindings.length > 0) {
-				allFindings.push(...semanticFindings);
-				this.log.append("audit_semantic_fail", {
-					phase: phase.name,
-					findings: semanticFindings.length,
-				});
-				const remediated = await runRemediation(
-					phase,
-					allFindings,
-					this.state.currentAttempt,
-					this.state.maxAttempts,
-					deps,
-				);
-				if (!remediated) {
-					return {
-						phase: phase.name,
-						passed: false,
-						attempts: this.state.currentAttempt + 1,
-						findings: allFindings,
-					};
-				}
-				this.state.currentAttempt++;
-				this.emitState();
+				attempt++;
 				continue;
 			}
 
 			// --- PASS ---
-			this.log.append("audit_semantic_pass", { phase: phase.name });
-			this.state.completedPhases.push(phase.name);
-			const finalAttempt = this.state.currentAttempt;
-			this.state.currentPhase = null;
-			this.state.currentAttempt = 0;
-			this.state.pendingSteer = null;
-			this.emitState();
-			this.log.append("phase_pass", { phase: phase.name });
-
-			// Archive the phase file
-			const destPath = path.join(this.completedDir, `${phase.name}_PASS.md`);
-			fs.copyFileSync(phase.filePath, destPath);
-			fs.unlinkSync(phase.filePath);
-
-			return { phase: phase.name, passed: true, attempts: finalAttempt, findings: [] };
+			this.log.append("audit_parallel_pass", { phase: phase.phaseId });
+			return { phase: phase.name, passed: true, attempts: attempt, findings: [] };
 		}
 
 		// Hit max attempts
 		this.log.append("circuit_breaker", {
-			phase: phase.name,
-			attempts: this.state.currentAttempt,
+			phase: phase.phaseId,
+			attempts: attempt,
 			findings: allFindings.length,
 		});
-		return { phase: phase.name, passed: false, attempts: this.state.currentAttempt, findings: allFindings };
+		return { phase: phase.name, passed: false, attempts: attempt, findings: allFindings };
+	}
+
+	/**
+	 * Archive a passed phase file to the completed directory.
+	 */
+	private archivePhaseFile(phase: PhaseSpec): void {
+		const destPath = path.join(this.completedDir, `${phase.phaseId}_PASS.md`);
+		try {
+			fs.copyFileSync(phase.filePath, destPath);
+			fs.unlinkSync(phase.filePath);
+		} catch {
+			/* file may already be archived */
+		}
 	}
 
 	/**

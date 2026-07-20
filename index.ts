@@ -79,13 +79,12 @@ class BakeWidget implements Component {
 
 		if (cfg.widgetMode === "compact") {
 			const parts: string[] = [];
-			if (state.currentPhase) {
-				const a =
-					state.currentAttempt >= 0
-						? `(${Math.min(state.currentAttempt + 1, state.maxAttempts)}/${state.maxAttempts})`
-						: "";
+			const active = state.activePhases || [];
+			if (active.length > 1) {
+				parts.push(`${t.fg("success", "●")} ${t.fg("accent", `${active.length} phases`)}`);
+			} else if (state.currentPhase) {
 				parts.push(
-					`${t.fg("success", "●")} ${t.fg("accent", state.currentPhase)}${a ? ` ${t.fg("warning", a)}` : ""}`,
+					`${t.fg("success", "●")} ${t.fg("accent", state.currentPhase)}`,
 				);
 			}
 			const done = state.completedPhases.length + state.skippedPhases.length;
@@ -108,7 +107,7 @@ class BakeWidget implements Component {
 		// Full mode — time-based scanner header (position from Date.now(), cached phase list)
 		const elapsed = (Date.now() - this.startTime) / 1000;
 		const scanPos = Math.abs(Math.sin(elapsed * 1.2));
-		const header = scannerTaper(width - 2, scanPos, t, "bake");
+		const doneCount = state.completedPhases.length + state.skippedPhases.length;
 		const phaseLines = allPhases.map((phase) => {
 			if (state.completedPhases.includes(phase)) {
 				return ` ${t.fg("success", "✓")} ${t.fg("muted", phase)}`;
@@ -116,20 +115,23 @@ class BakeWidget implements Component {
 			if (state.skippedPhases.includes(phase)) {
 				return ` ${t.fg("warning", "⏸")} ${t.fg("muted", phase)}`;
 			}
-			if (state.currentPhase === phase) {
-				const attempt =
-					state.currentAttempt >= 0
-						? ` (${Math.min(state.currentAttempt + 1, state.maxAttempts)}/${state.maxAttempts})`
-						: "";
-				return `${t.fg("success", "●")} ${t.fg("accent", phase)}${t.fg("warning", attempt)}`;
+			// Active (concurrently running with others) or current (single)
+			if (state.activePhases?.includes(phase) || state.currentPhase === phase) {
+				return `${t.fg("success", "●")} ${t.fg("accent", phase)}`;
 			}
-			const doneCount = state.completedPhases.length + state.skippedPhases.length;
 			const idx = allPhases.indexOf(phase);
 			if (idx < doneCount) {
 				return ` ${t.fg("dim", "○")} ${t.fg("dim", phase)}`;
 			}
 			return ` ${t.fg("dim", "○")} ${t.fg("dim", phase)}`;
 		});
+
+		// Show active phase count in header suffix when parallel
+		const activeCount = state.activePhases?.length || 0;
+		const headerLabel = activeCount > 1
+			? `bake (${activeCount} active)`
+			: "bake";
+		const header = scannerTaper(width - 2, scanPos, t, headerLabel);
 		return [header, ...phaseLines];
 	}
 }
