@@ -31,7 +31,7 @@ bare grep. Use `rg` (ripgrep) for regex/filename search. Skip plain grep.
 focused — load the bare minimum, don't dump the entire skill doc into
 context unless asked.
 
-**Default branch is `master`**, not `main`.
+**Default branch is `main`**, not `main`.
 
 **Name the state.** I'm on a phone screen inside a tmux pane inside an
 AVF VM. Output scrolls past fast. If there's something I need to know
