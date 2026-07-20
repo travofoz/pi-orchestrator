@@ -1,0 +1,5 @@
+npm:pi-codex-goal
+npm:@tintinweb/pi-subagents
+npm:pi-web-access
+git:github.com/earendil-works/pi-review
+../../pi-bake

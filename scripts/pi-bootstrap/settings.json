@@ -1,0 +1,18 @@
+{
+  "lastChangelogVersion": "0.80.10",
+  "theme": "lotek",
+  "defaultProvider": "opencode",
+  "defaultModel": "deepseek-v4-flash-free",
+  "defaultThinkingLevel": "max",
+  "hideThinkingBlock": false,
+  "showCacheMissNotices": true,
+  "defaultProjectTrust": "always",
+  "treeFilterMode": "default",
+  "packages": [
+    "npm:pi-codex-goal",
+    "npm:@tintinweb/pi-subagents",
+    "npm:pi-web-access",
+    "git:github.com/earendil-works/pi-review",
+    "../../pi-bake"
+  ]
+}
