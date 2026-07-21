@@ -171,7 +171,7 @@ export class RpcAgent {
 			const resolvers = this.settledResolvers;
 			this.settledResolvers = [];
 			for (const cb of resolvers) {
-				cb.resolve();
+				cb.resolve(undefined);
 			}
 		}
 	}
@@ -268,7 +268,8 @@ export class RpcAgent {
 		let abortListener: (() => void) | null = null;
 		if (options?.signal) {
 			options.signal.addEventListener("abort", onAbort, { once: true });
-			abortListener = () => options.signal?.removeEventListener("abort", onAbort);
+			abortListener = () =>
+				options.signal?.removeEventListener("abort", onAbort);
 		}
 
 		try {
@@ -286,7 +287,12 @@ export class RpcAgent {
 			if (this.options.promptTimeout && this.options.promptTimeout > 0) {
 				const timeout = new Promise<never>((_, reject) => {
 					setTimeout(
-						() => reject(new Error(`Prompt timed out after ${this.options.promptTimeout}ms`)),
+						() =>
+							reject(
+								new Error(
+									`Prompt timed out after ${this.options.promptTimeout}ms`,
+								),
+							),
 						this.options.promptTimeout,
 					);
 				});
@@ -299,7 +305,9 @@ export class RpcAgent {
 			return deltas.join("");
 		} finally {
 			// Clean up listeners
-			this.deltaListeners = this.deltaListeners.filter((cb) => cb !== deltaHandler);
+			this.deltaListeners = this.deltaListeners.filter(
+				(cb) => cb !== deltaHandler,
+			);
 			if (abortListener) abortListener();
 		}
 	}

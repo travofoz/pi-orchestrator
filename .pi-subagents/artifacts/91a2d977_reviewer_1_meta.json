@@ -1,0 +1,131 @@
+{
+  "runId": "91a2d977",
+  "agent": "reviewer",
+  "task": "[Read from: /home/travofoz/pi-bake/plan.md, /home/travofoz/pi-bake/progress.md]\n\nReview ALL changes in this pi-bake repo diff for **type safety and null/undefined correctness**. Focus on:\n\n1. `components/overlay.ts`: `ThemeProxy` changed from `{ fg: (string,string)=>string; bg: (string,string)=>string }` to `Pick<Theme, 'fg' | 'bg'>`. Verify every consumer that passes a Theme instance to something typed ThemeProxy now compiles cleanly. Check `index.ts`, `commands/config.ts`, `commands/detail.ts`, `commands/reset.ts`, `commands/skip.ts`, `commands/rules.ts` for any remaining ThemeProxy mismatches.\n\n2. `lib/phase-writer.ts`: `depends_on ?? []` and `plan ?? []` extracted to local vars. Verify narrowest possible type, and that consumers of `depsArr`/`planArr` get `string[]` not `string[] | undefined`.\n\n3. `commands/doctor.ts`: `t.fg(\"bold\", ...)` → `t.bold(...)`. Confirm all other `.fg(...)` calls in the file use valid ThemeColor literals.\n\n4. `commands/skip.ts`: `String(args).trim()` — args is typed as `string` from RegisteredCommand handler. Is `String(args)` redundant? Does `args.trim()` work? Check the handler signature.\n\n5. `commands/rules.ts`: `bakeCtx` was missing — verify it's now imported and used correctly.\n\n6. `commands/log.ts`, `commands/steer.ts`, `commands/skip.ts`: `usage` field removed. Does `Omit<RegisteredCommand, 'name' | 'sourceInfo'>` accept the remaining fields? Verify no other invalid fields remain.\n\n7. `commands/detail.ts`: `ov!` assertions — verify with TypeScript that `ov` is definitely assigned before those callbacks can fire.\n\nRead the actual files to verify. Do NOT edit anything. Report type safety issues, correctness concerns, and optional observations.",
+  "exitCode": 0,
+  "usage": {
+    "input": 54976,
+    "output": 13016,
+    "cacheRead": 637184,
+    "cacheWrite": 0,
+    "cost": 0,
+    "turns": 17
+  },
+  "model": "opencode/deepseek-v4-flash-free:high",
+  "attemptedModels": [
+    "opencode/deepseek-v4-flash-free:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "opencode/deepseek-v4-flash-free:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 54976,
+        "output": 13016,
+        "cacheRead": 637184,
+        "cacheWrite": 0,
+        "cost": 0,
+        "turns": 17
+      }
+    }
+  ],
+  "durationMs": 119901,
+  "toolCount": 43,
+  "acceptance": {
+    "status": "attested",
+    "explicit": false,
+    "effectiveAcceptance": {
+      "level": "attested",
+      "explicit": false,
+      "inferredReason": [
+        "read-only/reviewer-style agent"
+      ],
+      "criteria": [
+        {
+          "id": "criterion-1",
+          "must": "Return concrete findings with file paths and severity when applicable",
+          "evidence": [
+            "review-findings",
+            "residual-risks"
+          ],
+          "severity": "required"
+        }
+      ],
+      "evidence": [
+        "review-findings",
+        "residual-risks"
+      ],
+      "verify": [],
+      "stopRules": []
+    },
+    "inferredReason": [
+      "read-only/reviewer-style agent"
+    ],
+    "criteria": [
+      {
+        "id": "criterion-1",
+        "must": "Return concrete findings with file paths and severity when applicable",
+        "evidence": [
+          "review-findings",
+          "residual-risks"
+        ],
+        "severity": "required"
+      }
+    ],
+    "runtimeChecks": [],
+    "verifyRuns": [],
+    "childReport": {
+      "criteriaSatisfied": [
+        {
+          "id": "criterion-1",
+          "status": "satisfied",
+          "evidence": "Returned concrete findings for all 7 checklist items with file paths, line numbers, and severity. Verified 17 command files, index.ts, overlay.ts, and phase-writer.ts against the ThemeProxy type change, ?? narrowing, t.fg→t.bold conversion, String(args).trim(), bakeCtx import, usage field removal, and ov! assertion safety."
+        }
+      ],
+      "changedFiles": [
+        "components/overlay.ts",
+        "index.ts",
+        "lib/phase-writer.ts",
+        "commands/doctor.ts",
+        "commands/skip.ts",
+        "commands/rules.ts",
+        "commands/detail.ts",
+        "commands/log.ts",
+        "commands/steer.ts",
+        "commands/spec-decompose.ts",
+        "commands/start.ts",
+        "commands/config.ts",
+        "commands/reset.ts",
+        "rpc-agent.ts",
+        "bake-machine.ts",
+        "commands/ctx.ts"
+      ],
+      "testsAddedOrUpdated": [],
+      "commandsRun": [],
+      "validationOutput": [
+        "Manual code review of all 7 checklist items across 17+ source files. No TypeScript compiler available in project (no tsconfig.json), review conducted by structural analysis against published type declarations from @earendil-works/pi-coding-agent."
+      ],
+      "residualRisks": [
+        "commands/detail.ts buildBody() parameter typed as 'theme: any' — all theme.fg()/theme.bold() calls inside are unchecked by TypeScript. Pre-existing, not introduced by this diff.",
+        "taperTitle() in overlay.ts is exported dead code — not called anywhere. Harmless but could be cleaned up.",
+        "Cannot run tsc to prove zero type errors — project has no tsconfig.json or build scripts. Analysis relies on structural typing against node_modules type declarations."
+      ],
+      "noStagedFiles": true,
+      "diffSummary": "Type-safety refactor: ThemeProxy changed from loose {fg,bg} function signatures to Pick<Theme, 'fg'|'bg'> narrowing callers to valid ThemeColor/ThemeBg literals. phase-writer uses ?? [] to eliminate undefined from deps/plan arrays. doctor.ts fixes incorrect t.fg('bold',...) to t.bold(...). skip.ts simplifies args handling to String(args).trim(). rules.ts adds missing bakeCtx import. log/steer/skip remove deprecated usage field. detail.ts restructuring wraps overlay in try/finally with bakeCtx.widgetHidden guards.",
+      "reviewFindings": [
+        "correct: overlay.ts ThemeProxy = Pick<Theme, 'fg' | 'bg'> — all 6 consumers pass Theme instances, structural match holds exactly",
+        "correct: lib/phase-writer.ts depsArr/planArr narrowed to string[] via ?? [] — no undefined leaks to consumers",
+        "correct: doctor.ts t.fg('bold',...) → t.bold(...) — 'bold' was never a valid ThemeColor, this fixes a latent type error",
+        "correct: skip.ts String(args).trim() — redundant String() wrapper for string type but adds runtime safety",
+        "correct: rules.ts bakeCtx now imported and used for widgetHidden toggle and requestWidgetRender",
+        "correct: log.ts, steer.ts, skip.ts — usage field removed, only description+handler remain, compliant with Omit<RegisteredCommand, 'name'|'sourceInfo'>",
+        "correct: detail.ts ov! assertions are sound — ov assigned synchronously before any callback can fire",
+        "note: detail.ts buildBody(theme: any, ...) uses explicit any type — pre-existing unchecked calls inside"
+      ],
+      "manualNotes": "plan.md and progress.md do not exist at repo root. Analyzed against actual file contents and the full git diff. All 7 checklist items verified with no blockers found."
+    }
+  },
+  "transcriptPath": "/home/travofoz/pi-bake/.pi-subagents/artifacts/91a2d977_reviewer_1_transcript.jsonl",
+  "timestamp": 1784593856606
+}

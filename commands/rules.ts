@@ -1,9 +1,21 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { type SettingsListTheme, SettingsList, Container, Text } from "@earendil-works/pi-tui";
+import {
+	type SettingsListTheme,
+	SettingsList,
+	Container,
+	Text,
+} from "@earendil-works/pi-tui";
 import { Overlay } from "../components/overlay.ts";
-import { RULES_DIR, RULES_STATE_FILE, loadRulesState, saveRulesState, getRuleFiles } from "./ctx.ts";
+import {
+	bakeCtx,
+	RULES_DIR,
+	RULES_STATE_FILE,
+	loadRulesState,
+	saveRulesState,
+	getRuleFiles,
+} from "./ctx.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-rules", {
@@ -50,40 +62,41 @@ export function register(pi: ExtensionAPI): void {
 
 			bakeCtx.widgetHidden = true;
 			try {
-			await cmdCtx.ui.custom<void>(
-				(tui, theme, _kb, done) => {
-					const ov = new Overlay(theme, { title: "ast-grep Rules" });
+				await cmdCtx.ui.custom<void>(
+					(tui, theme, _kb, done) => {
+						const ov = new Overlay(theme, { title: "ast-grep Rules" });
 
-					const settingsTheme: SettingsListTheme = {
-						label: (s, _sel) => theme.fg("text", s),
-						value: (s, sel) => (sel ? theme.fg("accent", theme.bold(s)) : theme.fg("muted", s)),
-						description: (s) => theme.fg("dim", s),
-						cursor: theme.fg("accent", "▸"),
-						hint: (s) => theme.fg("dim", s),
-					};
-					const settingsList = new SettingsList(
-						items,
-						Math.min(items.length + 2, 15),
-						settingsTheme,
-						(id, newValue) => {
-							rulesState[id] = newValue === "on";
-							saveRulesState(rulesState);
-						},
-						() => done(undefined),
-						{ enableSearch: true },
-					);
-					ov.addBody(settingsList);
-					ov.addFooter("↑↓ navigate  ·  space toggle  ·  esc close");
+						const settingsTheme: SettingsListTheme = {
+							label: (s, _sel) => theme.fg("text", s),
+							value: (s, sel) =>
+								sel ? theme.fg("accent", theme.bold(s)) : theme.fg("muted", s),
+							description: (s) => theme.fg("dim", s),
+							cursor: theme.fg("accent", "▸"),
+							hint: (s) => theme.fg("dim", s),
+						};
+						const settingsList = new SettingsList(
+							items,
+							Math.min(items.length + 2, 15),
+							settingsTheme,
+							(id, newValue) => {
+								rulesState[id] = newValue === "on";
+								saveRulesState(rulesState);
+							},
+							() => done(undefined),
+							{ enableSearch: true },
+						);
+						ov.addBody(settingsList);
+						ov.addFooter("↑↓ navigate  ·  space toggle  ·  esc close");
 
-					return {
-						render: (w) => ov.render(w),
-						invalidate: () => ov.invalidate(),
-						handleInput: (data) => settingsList.handleInput?.(data),
-						dispose: () => ov.dispose(),
-					};
-				},
-				{ overlay: true },
-			);
+						return {
+							render: (w) => ov.render(w),
+							invalidate: () => ov.invalidate(),
+							handleInput: (data) => settingsList.handleInput?.(data),
+							dispose: () => ov.dispose(),
+						};
+					},
+					{ overlay: true },
+				);
 			} finally {
 				bakeCtx.widgetHidden = false;
 				bakeCtx.requestWidgetRender?.();

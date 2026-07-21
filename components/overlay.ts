@@ -8,12 +8,11 @@
  *   Dark grey bg, white text, 2-col margin.
  */
 
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Container, visibleWidth } from "@earendil-works/pi-tui";
 
-export type ThemeProxy = {
-	fg: (variant: string, text: string) => string;
-	bg: (variant: string, text: string) => string;
-};
+/** Theme fg/bg methods — picks the exact overloads from pi's Theme class. */
+export type ThemeProxy = Pick<Theme, "fg" | "bg">;
 
 const PANEL_BG = "\x1b[48;5;232m";
 const RESET_WHITE = "\x1b[0m\x1b[38;5;255m";
@@ -39,11 +38,15 @@ const GREEN_BRIGHT = "\x1b[38;5;119m";
 const GREEN_MID = "\x1b[38;5;108m";
 const GREEN_DIM = "\x1b[38;5;65m";
 const RESET = "\x1b[0m";
-const WHITE_FG = "\x1b[38;5;255m";
 
 /** Build a mirrored green taper with two spots sweeping center→out→center.
  *  All green — bright spots at the moving edges, dim in the middle. */
-export function scannerTaper(width: number, scanSpread: number, t: ThemeProxy, title?: string): string {
+export function scannerTaper(
+	width: number,
+	scanSpread: number,
+	t: ThemeProxy,
+	title?: string,
+): string {
 	if (width <= 0) return "";
 	const chars = taperChars(width);
 	const ct = (width - 1) / 2;
@@ -52,15 +55,21 @@ export function scannerTaper(width: number, scanSpread: number, t: ThemeProxy, t
 	const rightScan = Math.round(ct + scanSpread * ct);
 
 	const colorLine = (lineChars: string[], offset: number): string => {
-		return lineChars.map((ch, i) => {
-			const absIdx = offset + i;
-			const minDist = Math.min(Math.abs(absIdx - leftScan), Math.abs(absIdx - rightScan));
-			if (minDist <= 5) {
-				const c = minDist <= 1 ? GREEN_BRIGHT : minDist <= 3 ? GREEN_MID : GREEN_DIM;
-				return `${c}${ch}${RESET}`;
-			}
-			return `${GREEN_DIM}${ch}${RESET}`;
-		}).join("");
+		return lineChars
+			.map((ch, i) => {
+				const absIdx = offset + i;
+				const minDist = Math.min(
+					Math.abs(absIdx - leftScan),
+					Math.abs(absIdx - rightScan),
+				);
+				if (minDist <= 5) {
+					const c =
+						minDist <= 1 ? GREEN_BRIGHT : minDist <= 3 ? GREEN_MID : GREEN_DIM;
+					return `${c}${ch}${RESET}`;
+				}
+				return `${GREEN_DIM}${ch}${RESET}`;
+			})
+			.join("");
 	};
 
 	if (title) {
@@ -76,12 +85,19 @@ export function scannerTaper(width: number, scanSpread: number, t: ThemeProxy, t
 	return colorLine(chars, 0);
 }
 
-export function taperTitle(title: string, width: number, fg: (v: string, t: string) => string): string {
+export function taperTitle(
+	title: string,
+	width: number,
+	fg: (v: string, t: string) => string,
+): string {
 	const titleStr = `═[ ${fg("text", title)} ]`;
 	const tv = visibleWidth(titleStr);
 	const lw = Math.floor((width - tv) / 2);
 	const rw = width - tv - lw;
-	return fg("accent", taperChars(lw).join("") + titleStr + taperChars(rw).join(""));
+	return fg(
+		"accent",
+		taperChars(lw).join("") + titleStr + taperChars(rw).join(""),
+	);
 }
 
 export class Overlay {
@@ -92,7 +108,10 @@ export class Overlay {
 	private animStart: number;
 	private maxHeight: number;
 
-	constructor(theme: ThemeProxy, opts: { title?: string; maxHeight?: number } = {}) {
+	constructor(
+		theme: ThemeProxy,
+		opts: { title?: string; maxHeight?: number } = {},
+	) {
 		this.theme = theme;
 		this.title = opts.title ?? "";
 		this.body = new Container();
@@ -101,7 +120,10 @@ export class Overlay {
 		this.maxHeight = opts.maxHeight ?? 0;
 	}
 
-	addBody(component: { render: (w: number) => string[]; invalidate: () => void }): void {
+	addBody(component: {
+		render: (w: number) => string[];
+		invalidate: () => void;
+	}): void {
 		this.body.addChild(component);
 	}
 
@@ -132,7 +154,8 @@ export class Overlay {
 		// Reserve space for frame elements so footer + bottom rule never get clipped
 		const footerCount = this.footerLines.length;
 		const overhead = 3 + (footerCount > 0 ? footerCount + 2 : 0); // top rule + empty line + bottom rule (+ footer lines + empty lines)
-		const bodyMax = this.maxHeight > 0 ? Math.max(0, this.maxHeight - overhead) : Infinity;
+		const bodyMax =
+			this.maxHeight > 0 ? Math.max(0, this.maxHeight - overhead) : Infinity;
 
 		let bodyLines = this.body.render(innerW - indent);
 		if (bodyLines.length > bodyMax) {

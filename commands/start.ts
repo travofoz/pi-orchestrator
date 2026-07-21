@@ -1,5 +1,4 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { showLoaderOverlay } from "../lib/overlay.ts";
 import { bakeCtx } from "./ctx.ts";
 
 export function register(pi: ExtensionAPI): void {
@@ -10,27 +9,26 @@ export function register(pi: ExtensionAPI): void {
 			if (!bake) return;
 			const t = cmdCtx.ui.theme;
 
-			cmdCtx.ui.setStatus("bake", t.fg("accent", "○ Starting pipeline..."));
-
-			bakeCtx.loaderMsg = "Starting pipeline...";
-
-			const overlay = showLoaderOverlay(
-				cmdCtx.ui,
-				() => bakeCtx.loaderMsg,
-				() => bake?.abort(),
-				() => {
-					bakeCtx.closeLoader = overlay.close;
-				},
-			);
-
-			cmdCtx.ui.notify(t.fg("success", "Pipeline started — TUI stays responsive"), "info");
-
-			try {
-				await bake.runPipeline();
-			} finally {
-				overlay.close();
-				bakeCtx.closeLoader = null;
+			// Guard: don't start a second pipeline concurrently
+			if (bake.stateSnapshot.status === "running") {
+				cmdCtx.ui.notify(t.fg("warning", "Pipeline already running"), "info");
+				return;
 			}
+
+			cmdCtx.ui.setStatus("bake", t.fg("accent", "○ Starting pipeline..."));
+			cmdCtx.ui.notify(t.fg("success", "Pipeline started"), "info");
+
+			// Fire pipeline in background — the handler returns immediately so the
+			// TUI stays genuinely responsive. Status, working indicator, and widget
+			// updates flow through the existing onStateChange / onStatus / onLoader
+			// callbacks wired in index.ts session_start.
+			bake.runPipeline().catch((err) => {
+				cmdCtx.ui.notify(
+					t.fg("error", `Pipeline failed: ${err.message}`),
+					"info",
+				);
+				cmdCtx.ui.setStatus("bake", t.fg("error", "✗ pipeline failed"));
+			});
 		},
 	});
 }

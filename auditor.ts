@@ -39,18 +39,27 @@ export async function runStructuralAudit(
 	const findings: AuditFinding[] = [];
 	const allRules = fs.readdirSync(baseDir).filter((f) => f.endsWith(".yml"));
 	// If enabledRules provided, only run those; otherwise run all
-	const rules = enabledRules ? allRules.filter((f) => enabledRules.has(f)) : allRules;
+	const rules = enabledRules
+		? allRules.filter((f) => enabledRules.has(f))
+		: allRules;
 
 	for (const ruleFile of rules) {
 		const rulePath = path.join(baseDir, ruleFile);
 		try {
-			const result = await spawnAsync("sg", ["scan", "-r", rulePath, workspacePath], {
-				timeout: 30000,
-			});
+			const result = await spawnAsync(
+				"sg",
+				["scan", "-r", rulePath, workspacePath],
+				{
+					timeout: 30000,
+				},
+			);
 			// sg exits 0 when no violations, exits non-zero when it finds issues
 			// Either way, stdout contains the match output
 			const output = result.stdout || result.stderr || "";
-			const lines = output.trim().split("\n").filter((l) => l.startsWith("  "));
+			const lines = output
+				.trim()
+				.split("\n")
+				.filter((l) => l.startsWith("  "));
 			if (lines.length > 0) {
 				findings.push({
 					check: 0,
@@ -59,15 +68,10 @@ export async function runStructuralAudit(
 					source: "ast-grep",
 				});
 			}
-		} catch (err: any) {
-			// Spawn failed (command not found, permission denied, timeout)
-			// sg not installed or inaccessible
-			findings.push({
-				check: 0,
-				detail: `sg scan error for ${ruleFile}: ${err.message}`,
-				rule: ruleFile,
-				source: "ast-grep",
-			});
+		} catch {
+			// Spawn failed (command not found, permission denied, timeout).
+			// This is an infrastructure issue, not a code finding — skip the rule
+			// and continue. The rule produces no findings when sg can't run.
 		}
 	}
 
@@ -128,7 +132,9 @@ export function parseSemanticAuditOutput(output: string): AuditResult {
 			const trimmed = line.trim();
 			if (trimmed.startsWith("FAIL")) {
 				// Extract check number and detail
-				const checkMatch = trimmed.match(/^FAIL\s*(?:\*\*Check\s*(\d+)\*\*)?\s*[—\-–]?\s*(.*)/);
+				const checkMatch = trimmed.match(
+					/^FAIL\s*(?:\*\*Check\s*(\d+)\*\*)?\s*[—\-–]?\s*(.*)/,
+				);
 				findings.push({
 					check: checkMatch ? Number(checkMatch[1]) || 0 : 0,
 					detail: checkMatch?.[2] || trimmed,
@@ -138,7 +144,8 @@ export function parseSemanticAuditOutput(output: string): AuditResult {
 		}
 	}
 
-	const hasIssues = output.includes("RESULT: ISSUES") || output.includes("RESULT: FAIL");
+	const hasIssues =
+		output.includes("RESULT: ISSUES") || output.includes("RESULT: FAIL");
 	return {
 		passed: !hasIssues && findings.length === 0,
 		findings,

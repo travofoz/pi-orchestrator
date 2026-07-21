@@ -6,7 +6,10 @@
  */
 
 import type { AuditFinding } from "./auditor.ts";
-import { buildSemanticAuditPrompt, parseSemanticAuditOutput } from "./auditor.ts";
+import {
+	buildSemanticAuditPrompt,
+	parseSemanticAuditOutput,
+} from "./auditor.ts";
 import type { RpcAgent } from "./rpc-agent.ts";
 import type { EventLog } from "./event-log.ts";
 import type { PhaseSpec } from "./bake.ts";
@@ -16,37 +19,38 @@ import type { ExecutorDeps } from "./bake-executor.ts";
  * Run a semantic audit: invoke the LLM via RPC with the structured checklist.
  *
  * @returns Array of findings (empty = pass).
+ * @throws On RPC failure so the XState machine routes to onError (never silently passes).
  */
-export async function runSemanticAudit(
-	deps: { workspaceDir: string; rpcAgent: RpcAgent; onStatus: (msg: string) => void; onLoader: (show: boolean, msg: string) => void; log: EventLog },
-): Promise<AuditFinding[]> {
+export async function runSemanticAudit(deps: {
+	workspaceDir: string;
+	rpcAgent: RpcAgent;
+	onStatus: (msg: string) => void;
+	onLoader: (show: boolean, msg: string) => void;
+	log: EventLog;
+}): Promise<AuditFinding[]> {
 	const prompt = buildSemanticAuditPrompt(deps.workspaceDir);
 
 	deps.onStatus?.("Audit: semantic check (LLM)");
 	deps.onLoader?.(true, "Audit: semantic check (LLM)");
 
-	try {
-		// Fresh context for audit
-		await deps.rpcAgent.newSession();
+	// Fresh context for audit
+	await deps.rpcAgent.newSession();
 
-		let previewBuf = "";
-		let lastStatusUpdate = 0;
-		const output = await deps.rpcAgent.prompt(prompt, (delta) => {
-			previewBuf += delta;
-			const now = Date.now();
-			if (now - lastStatusUpdate > 300) {
-				lastStatusUpdate = now;
-				const preview = previewBuf.trimEnd().slice(-80).replace(/\n/g, " ");
-				deps.onStatus?.(`Audit (LLM)  ➜ ${preview}`);
-			}
-		});
+	let previewBuf = "";
+	let lastStatusUpdate = 0;
+	const output = await deps.rpcAgent.prompt(prompt, (delta) => {
+		previewBuf += delta;
+		const now = Date.now();
+		if (now - lastStatusUpdate > 300) {
+			lastStatusUpdate = now;
+			const preview = previewBuf.trimEnd().slice(-80).replace(/\n/g, " ");
+			deps.onStatus?.(`Audit (LLM)  ➜ ${preview}`);
+		}
+	});
 
-		const auditResult = parseSemanticAuditOutput(output);
-		return auditResult.findings;
-	} catch (err: any) {
-		deps.log.append("semantic_audit_crash", { error: err.message });
-		return [];
-	}
+	deps.log.append("semantic_audit_complete", { outputLength: output.length });
+	const auditResult = parseSemanticAuditOutput(output);
+	return auditResult.findings;
 }
 
 /**
@@ -83,7 +87,10 @@ export async function runRemediation(
 	const executorPrompt = `The following issues were found in the project at ${deps.workspaceDir}. Fix each one specifically.\n\n${remediationSpec}\n\nAfter fixing each issue, commit with a descriptive message. Run build/lint/test to verify.\n\nUse ast-grep (sg) to verify your fixes structurally. For example: sg scan -r rules/ . to scan for regressions, or sg -p '<pattern>' . to check specific patterns before committing.`;
 
 	deps.onStatus?.(`Remediation: ${phase.name} (attempt ${currentAttempt + 1})`);
-	deps.onLoader?.(true, `Remediation: ${phase.name} (attempt ${currentAttempt + 1})`);
+	deps.onLoader?.(
+		true,
+		`Remediation: ${phase.name} (attempt ${currentAttempt + 1})`,
+	);
 
 	try {
 		// Fresh context for remediation

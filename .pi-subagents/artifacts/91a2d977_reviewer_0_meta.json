@@ -1,0 +1,157 @@
+{
+  "runId": "91a2d977",
+  "agent": "reviewer",
+  "task": "[Read from: /home/travofoz/pi-bake/plan.md, /home/travofoz/pi-bake/progress.md]\n\nReview ALL changes in this pi-bake repo diff for **correctness and regressions**. Focus on:\n\n1. `commands/start.ts`: pipeline is now fire-and-forget (background promise). Does the `.catch()` handler correctly report errors? Is there any risk of overlapping pipeline runs (guard checks `status === \"running\"`)? Is there a missing `abort()` mechanism from the old overlay?\n\n2. `commands/spec-decompose.ts` and `commands/start.ts`: removed `showLoaderOverlay` entirely. Does `cmdCtx.ui.notify` + `setStatus` produce visible feedback? Is the abort path removed acceptable for decompose (single LLM call, shorter)?\n\n3. `bake-machine.ts`: `isReady()` now guards against missing phase IDs with `if (!p) return false` and treats missing dependencies as met. Could a stale DAG with phantom deps cause phases to run out-of-order? Can `isReady` return true for a phase whose dependency was never a phase file?\n\n4. `rpc-agent.ts`: `cb.resolve()` → `cb.resolve(undefined)`. Does anything consuming the settled promise depend on the resolved value?\n\n5. `commands/skip.ts`: `list.onSelect = (v) => done(v.value)` (was `done(v)` — v was SelectItem object, not string). Did anything downstream expect the SelectItem? The `selected` variable is now declared before the try block — any scoping edge cases?\n\n6. `commands/detail.ts`: `ov!` non-null assertions. Is the overlay always initialized before render/invalidate/dispose are called?\n\n7. Any race condition or ordering issue from running multiple async operations in parallel?\n\nRead the actual files to verify. Do NOT edit anything. Report blockers, things worth fixing now, and optional observations.",
+  "exitCode": 0,
+  "usage": {
+    "input": 54384,
+    "output": 12332,
+    "cacheRead": 490880,
+    "cacheWrite": 0,
+    "cost": 0,
+    "turns": 13
+  },
+  "model": "opencode/deepseek-v4-flash-free:high",
+  "attemptedModels": [
+    "opencode/deepseek-v4-flash-free:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "opencode/deepseek-v4-flash-free:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 54384,
+        "output": 12332,
+        "cacheRead": 490880,
+        "cacheWrite": 0,
+        "cost": 0,
+        "turns": 13
+      }
+    }
+  ],
+  "durationMs": 123469,
+  "toolCount": 30,
+  "acceptance": {
+    "status": "attested",
+    "explicit": false,
+    "effectiveAcceptance": {
+      "level": "attested",
+      "explicit": false,
+      "inferredReason": [
+        "read-only/reviewer-style agent"
+      ],
+      "criteria": [
+        {
+          "id": "criterion-1",
+          "must": "Return concrete findings with file paths and severity when applicable",
+          "evidence": [
+            "review-findings",
+            "residual-risks"
+          ],
+          "severity": "required"
+        }
+      ],
+      "evidence": [
+        "review-findings",
+        "residual-risks"
+      ],
+      "verify": [],
+      "stopRules": []
+    },
+    "inferredReason": [
+      "read-only/reviewer-style agent"
+    ],
+    "criteria": [
+      {
+        "id": "criterion-1",
+        "must": "Return concrete findings with file paths and severity when applicable",
+        "evidence": [
+          "review-findings",
+          "residual-risks"
+        ],
+        "severity": "required"
+      }
+    ],
+    "runtimeChecks": [],
+    "verifyRuns": [],
+    "childReport": {
+      "criteriaSatisfied": [
+        {
+          "id": "criterion-1",
+          "status": "satisfied",
+          "evidence": "Reviewed all 7 focus areas across 6 source files (commands/start.ts, commands/spec-decompose.ts, bake-machine.ts, rpc-agent.ts, commands/skip.ts, commands/detail.ts) plus supporting files (bake.ts, index.ts, components/overlay.ts, commands/ctx.ts). Found 1 blocker, 1 minor concern, and multiple fixes."
+        }
+      ],
+      "changedFiles": [
+        ".bake/phases/01_project_scaffolding.md",
+        ".bake/phases/02_littlefs_storage_engine.md",
+        ".bake/phases/03_wifi_state_machine.md",
+        ".bake/phases/04_button_interaction_matrix.md",
+        ".bake/phases/05_deep_sleep_coffin_mode.md",
+        ".bake/phases/06_20s_release_to_rollback_protocol.md",
+        ".bake/phases/07_mdns_resolution_engine.md",
+        ".bake/phases/08_crypto_handshake_spake2_mtls.md",
+        ".bake/phases/09_adb_command_payload_database.md",
+        ".bake/phases/10_web_dashboard_frontend.md",
+        ".bake/phases/11_nvs_configuration_persistence.md",
+        ".bake/spec-context.md",
+        "bake-machine.ts",
+        "commands/ctx.ts",
+        "commands/detail.ts",
+        "commands/doctor.ts",
+        "commands/log.ts",
+        "commands/rules.ts",
+        "commands/skip.ts",
+        "commands/spec-decompose.ts",
+        "commands/start.ts",
+        "commands/steer.ts",
+        "components/overlay.ts",
+        "index.ts",
+        "lib/phase-writer.ts",
+        "package-lock.json",
+        "rpc-agent.ts"
+      ],
+      "testsAddedOrUpdated": [],
+      "commandsRun": [
+        {
+          "command": "git diff HEAD --stat",
+          "result": "passed",
+          "summary": "Listed all 27 changed files"
+        },
+        {
+          "command": "git show HEAD~1:commands/start.ts",
+          "result": "passed",
+          "summary": "Confirmed old start.ts awaited runPipeline with loader overlay"
+        },
+        {
+          "command": "grep status running bake.ts",
+          "result": "passed",
+          "summary": "Only one assignment to 'running': inside resume(), not runPipeline()"
+        }
+      ],
+      "validationOutput": [
+        "Compilation check: no local tsc available (peer dependency). Manual inspection of all focus files complete."
+      ],
+      "residualRisks": [
+        "blocker: commands/start.ts guard is ineffective — state.status is never set to 'running' by runPipeline(), allowing concurrent pipeline starts",
+        "minor: start.ts .catch() assumes Error objects; a thrown non-Error would produce 'Pipeline failed: undefined'",
+        "minor: bake-machine.ts isReady() silently treats phantom deps as met — phases can run out-of-order if dag.json references deleted phases",
+        "minor: fire-and-forget generateReadme and background pipeline share the same RPC agent with no isolation"
+      ],
+      "noStagedFiles": true,
+      "diffSummary": "Refactors start/spec-decompose to remove loader overlay in favor of status+notify, converts pipeline to fire-and-forget with guard, fixes skip.ts SelectItem bug, reformats many files with prettier, refactors detail.ts with ov! assertions, removes closeLoader/loaderMsg ctx fields",
+      "reviewFindings": [
+        "blocker: commands/start.ts:20-22 — running guard checks stateSnapshot.status === 'running' but runPipeline() never sets status to 'running'. Multiple bake-start calls can launch concurrent pipelines. Fix: set this.state.status = 'running' at the start of Bake.runPipeline().",
+        "minor: commands/start.ts:29 — .catch() uses err.message; thrown non-Error values would produce unhelpful message. Consider using String(err) for robustness.",
+        "note: commands/skip.ts:76 — old code passed SelectItem object to done(); new code correctly passes v.value. Also fixes const-scope bug. Clean fix.",
+        "note: commands/detail.ts:337-339 — ov! non-null assertions are safe; overlay is initialized synchronously before return.",
+        "note: rpc-agent.ts:174 — cb.resolve(undefined) vs resolve(): no behavioral difference for Promise<void>.",
+        "note: bake-machine.ts:321-325 — phantom dependency handling is by-design but could cause ordering surprises."
+      ],
+      "manualNotes": "The most significant finding is the ineffective running guard in start.ts. Bake.runPipeline() must set state.status='running' for the guard to work. This is a one-line fix in bake.ts. The old code awaited runPipeline (so no guard was needed), but the fire-and-forget conversion added a guard that doesn't connect to the state machine."
+    }
+  },
+  "transcriptPath": "/home/travofoz/pi-bake/.pi-subagents/artifacts/91a2d977_reviewer_0_transcript.jsonl",
+  "timestamp": 1784593860166
+}

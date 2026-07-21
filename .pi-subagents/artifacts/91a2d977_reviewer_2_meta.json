@@ -1,0 +1,144 @@
+{
+  "runId": "91a2d977",
+  "agent": "reviewer",
+  "task": "[Read from: /home/travofoz/pi-bake/plan.md, /home/travofoz/pi-bake/progress.md]\n\nReview ALL changes in this pi-bake repo diff for **maintainability, dead code, and simplification**. Focus on:\n\n1. Dead code removed: `closeLoader`, `loaderMsg`, `showLoaderOverlay`, `WHITE_FG`, abort paths in spec-decompose. Are there any remaining references to these in files NOT in this diff that are now orphaned?\n\n2. `commands/ctx.ts`: `closeLoader` and `loaderMsg` fields removed. Check `commands/index.ts`, `commands/resume.ts`, `commands/pause.ts`, `commands/retry.ts`, `commands/reset.ts` for any lingering references to `closeLoader` or `loaderMsg`.\n\n3. The overlay removal means `lib/overlay.ts` and `components/loader.ts` are now dead code. Should they be deleted, or are they potentially useful for future features? Check if anything still imports them.\n\n4. Biome auto-formatting reformatted many files (detail.ts, doctor.ts, rules.ts, etc.). Are there any formatting-only changes that obscure the semantic changes? Is it worth committing formatting separately?\n\n5. `components/overlay.ts`: `Picker<Theme, 'fg' | 'bg'>` — this is more precise than the old hand-rolled type. Is there any other code that constructs or uses ThemeProxy directly (not by passing Theme) that might break?\n\n6. `index.ts`: `onLoader` handler simplified from 6 lines to 2. `onStateChange` lost the `closeLoader` block. Verify these callbacks still provide adequate status feedback during pipeline execution.\n\n7. Any imports added but not used, or old imports that should be removed?\n\nRead the actual files to verify. Do NOT edit anything. Report maintainability concerns, orphaned code, simplification opportunities, and optional observations.",
+  "exitCode": 0,
+  "usage": {
+    "input": 59178,
+    "output": 12045,
+    "cacheRead": 831360,
+    "cacheWrite": 0,
+    "cost": 0,
+    "turns": 21
+  },
+  "model": "opencode/deepseek-v4-flash-free:high",
+  "attemptedModels": [
+    "opencode/deepseek-v4-flash-free:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "opencode/deepseek-v4-flash-free:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 59178,
+        "output": 12045,
+        "cacheRead": 831360,
+        "cacheWrite": 0,
+        "cost": 0,
+        "turns": 21
+      }
+    }
+  ],
+  "durationMs": 124679,
+  "toolCount": 54,
+  "acceptance": {
+    "status": "attested",
+    "explicit": false,
+    "effectiveAcceptance": {
+      "level": "attested",
+      "explicit": false,
+      "inferredReason": [
+        "read-only/reviewer-style agent"
+      ],
+      "criteria": [
+        {
+          "id": "criterion-1",
+          "must": "Return concrete findings with file paths and severity when applicable",
+          "evidence": [
+            "review-findings",
+            "residual-risks"
+          ],
+          "severity": "required"
+        }
+      ],
+      "evidence": [
+        "review-findings",
+        "residual-risks"
+      ],
+      "verify": [],
+      "stopRules": []
+    },
+    "inferredReason": [
+      "read-only/reviewer-style agent"
+    ],
+    "criteria": [
+      {
+        "id": "criterion-1",
+        "must": "Return concrete findings with file paths and severity when applicable",
+        "evidence": [
+          "review-findings",
+          "residual-risks"
+        ],
+        "severity": "required"
+      }
+    ],
+    "runtimeChecks": [],
+    "verifyRuns": [],
+    "childReport": {
+      "criteriaSatisfied": [
+        {
+          "id": "criterion-1",
+          "status": "satisfied",
+          "evidence": "Reviewed all 26 changed files (excluding package-lock.json) for dead code, orphaned references, semantic vs formatting changes, import correctness, and callback adequacy. Findings are documented with file paths and severity."
+        }
+      ],
+      "changedFiles": [
+        "commands/ctx.ts",
+        "commands/detail.ts",
+        "commands/doctor.ts",
+        "commands/log.ts",
+        "commands/rules.ts",
+        "commands/skip.ts",
+        "commands/spec-decompose.ts",
+        "commands/start.ts",
+        "commands/steer.ts",
+        "components/overlay.ts",
+        "index.ts",
+        "bake-machine.ts",
+        "rpc-agent.ts",
+        "lib/phase-writer.ts",
+        ".bake/spec-context.md"
+      ],
+      "testsAddedOrUpdated": [],
+      "commandsRun": [
+        {
+          "command": "git diff --stat",
+          "result": "passed",
+          "summary": "Verified 27 files changed (799 insertions, 450 deletions)"
+        },
+        {
+          "command": "grep -r 'closeLoader|loaderMsg|showLoaderOverlay|WHITE_FG' --include='*.ts'",
+          "result": "passed",
+          "summary": "No remaining references in .ts source files (only a doc-comment in lib/overlay.ts)"
+        }
+      ],
+      "validationOutput": [
+        "All grep searches for orphaned symbols returned clean. All import verifications passed."
+      ],
+      "residualRisks": [
+        "lib/overlay.ts and components/loader.ts are orphaned dead code — should be deleted to prevent confusion",
+        "bake-machine.ts imports type ExecutorDeps but does not use it (pre-existing, not introduced by this diff)",
+        "User-facing abort UI for decompose/start removed — users can no longer cancel these operations mid-flight via TUI",
+        "Biome formatting changes are interleaved with semantic changes across 7+ files, making future history traversal harder"
+      ],
+      "noStagedFiles": true,
+      "diffSummary": "Removes loader overlay pattern (closeLoader, loaderMsg, showLoaderOverlay, WHITE_FG), simplifies index.ts callbacks, makes start.ts fire-and-forget, fixes SelectList bug in skip.ts, fixes missing bakeCtx import in rules.ts, tightens ThemeProxy type, adds null-safe phase lookup in bake-machine.ts, and applies Biome auto-formatting across many files. 12 ESP32-C3 phase files deleted from .bake/ as part of spec regeneration.",
+      "reviewFindings": [
+        "blocker: none found",
+        "note: lib/overlay.ts and components/loader.ts are orphaned dead code — recommend deletion",
+        "note: bake-machine.ts imports unused type ExecutorDeps (pre-existing minor) — clean-up opportunity",
+        "note: user abort paths removed from spec-decompose and start — deliberate, but a minor UX regression",
+        "note: formatting changes mixed with semantic changes in 7+ files — worth committing separately in future",
+        "fix: rules.ts added missing bakeCtx import (was being used without import — bug fix)",
+        "fix: skip.ts SelectList now passes .value instead of whole item object (was passing wrong type to bake.skipPhase)",
+        "fix: skip.ts variable hoisting (selected was scoped inside try, used outside — now properly declared before try)",
+        "fix: spec-decompose.ts generateReadme no longer sets bakeCtx.loaderMsg (field removed from ctx)",
+        "fix: bake-machine.ts phaseSpecs.get(phaseId)! → null-safe check (fixes potential crash on unknown DAG phases)"
+      ],
+      "manualNotes": "The .bake/phases/*.md deletions (12 files) and .bake/spec-context.md replacement are unrelated to the code changes — they reflect a spec regeneration. The removal of the loader overlay pattern is the central architectural change: UI feedback now flows through setStatus + setWorkingIndicator + onLoader/onStateChange callbacks, replacing the custom overlay+closeLoader bridge. This simplifies the code significantly and eliminates a source of render-contention bugs between overlays and the widget."
+    }
+  },
+  "transcriptPath": "/home/travofoz/pi-bake/.pi-subagents/artifacts/91a2d977_reviewer_2_transcript.jsonl",
+  "timestamp": 1784593861389
+}

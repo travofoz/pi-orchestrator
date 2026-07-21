@@ -34,11 +34,14 @@ function phaseId(phase: PhaseEntry): string {
 /**
  * Write the DAG manifest (dag.json) for the state machine.
  */
-export function writeDagManifest(phases: PhaseEntry[], phasesDir: string): void {
+export function writeDagManifest(
+	phases: PhaseEntry[],
+	phasesDir: string,
+): void {
 	const manifest: DagEntry[] = phases.map((p) => ({
 		id: phaseId(p),
 		name: p.name,
-		depends_on: p.depends_on || [],
+		depends_on: p.depends_on ?? [],
 	}));
 	fs.writeFileSync(
 		path.join(phasesDir, "dag.json"),
@@ -54,13 +57,15 @@ export function writePhaseFiles(phases: PhaseEntry[], phasesDir: string): void {
 	for (const phase of phases) {
 		const id = phaseId(phase);
 		const fileName = id + ".md";
+		const depsArr = phase.depends_on ?? [];
 		const deps =
-			(phase.depends_on || []).length > 0
-				? `\n## Depends On\n${phase.depends_on.join(", ")}\n`
+			depsArr.length > 0
+				? `\n## Depends On\n${depsArr.join(", ")}\n`
 				: "\n## Depends On\n(none)\n";
+		const planArr = phase.plan ?? [];
 		const planSteps =
-			(phase.plan || []).length > 0
-				? `\n## Plan\n${phase.plan.map((s: string) => `- ${s}`).join("\n")}\n`
+			planArr.length > 0
+				? `\n## Plan\n${planArr.map((s: string) => `- ${s}`).join("\n")}\n`
 				: "\n## Plan\n(none)\n";
 		const content = [
 			`# ${phase.name}`,
@@ -84,11 +89,7 @@ export function writePhaseFiles(phases: PhaseEntry[], phasesDir: string): void {
  * Write the spec context to the .bake database directory.
  */
 export function writeContext(context: string, dbDir: string): void {
-	fs.writeFileSync(
-		path.join(dbDir, "spec-context.md"),
-		context,
-		"utf-8",
-	);
+	fs.writeFileSync(path.join(dbDir, "spec-context.md"), context, "utf-8");
 }
 
 /**

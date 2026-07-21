@@ -36,17 +36,12 @@
  *                    │    COMPLETED / FAILED (final, output: PhaseResult)
  */
 
-import {
-	setup,
-	createMachine,
-	createActor,
-	fromPromise,
-	waitFor,
-	type ActorRefFrom,
-} from "xstate";
-import type { PhaseSpec, AuditFinding } from "./bake.ts";
-import { EventLog } from "./event-log.ts";
-import { runExecutor, type ExecutorDeps, type ExecutorResult } from "./bake-executor.ts";
+import { setup, createActor, fromPromise, waitFor } from "xstate";
+import type { PhaseSpec } from "./bake.ts";
+import type { AuditFinding } from "./auditor.ts";
+import type { RpcAgent } from "./rpc-agent.ts";
+import type { EventLog } from "./event-log.ts";
+import { runExecutor, type ExecutorResult } from "./bake-executor.ts";
 import { runStructuralAudit } from "./auditor.ts";
 import { runSemanticAudit, runRemediation } from "./bake-audit.ts";
 
@@ -66,12 +61,24 @@ export interface BakeEnv {
 	workspaceDir: string;
 	rulesDir: string;
 	completedDir: string;
-	rpcAgent: { newSession: () => Promise<void> };
+	rpcAgent: RpcAgent;
 	getEnabledRules: () => Set<string> | undefined;
 	onStatus: (msg: string) => void;
 	onLoader: (show: boolean, msg: string) => void;
 	log: EventLog;
 	pendingSteer: () => string | null;
+	/**
+	 * Called by the XState PROVIDE_CONTEXT action to set steering guidance
+	 * through Bake state instead of reassigning the env getter.
+	 */
+	provideContext: (info: string) => void;
+	/**
+	 * Atomically consume a retry request for the given phaseId.
+	 * Returns true if a retry was pending (and now consumed).
+	 */
+	consumeRetry: (phaseId: string) => boolean;
+	/** Check whether a phase name has been externally skipped (via /bake-skip). */
+	isSkipped: (phaseName: string) => boolean;
 	maxAttempts: number;
 	/**
 	 * Called after each batch completes with the current progress.
@@ -86,6 +93,9 @@ export interface BakeEnv {
  * Build a typed, ready-to-run PhaseMachine with all actors wired via closure.
  * input: { spec: PhaseSpec }
  * output: PhaseResult
+ *
+ * Actors are declared directly in setup() (not via provide()) so that XState
+ * v5's TActors type parameter is inferred and src:"execute" resolves correctly.
  */
 function phaseMachine(env: BakeEnv) {
 	return setup({
@@ -99,16 +109,56 @@ function phaseMachine(env: BakeEnv) {
 				concerns: string[];
 				blockReason: string | null;
 			};
-			events:
-				| { type: "ABORT" }
-				| { type: "PROVIDE_CONTEXT"; info: string };
+			events: { type: "ABORT" } | { type: "PROVIDE_CONTEXT"; info: string };
 			output: PhaseResult;
-			actors: {
-				execute: ReturnType<typeof fromPromise<ExecutorResult, { spec: PhaseSpec; attempt: number; steer: string | null }>>;
-				structural: ReturnType<typeof fromPromise<AuditFinding[], {}>>;
-				semantic: ReturnType<typeof fromPromise<AuditFinding[], {}>>;
-				remediate: ReturnType<typeof fromPromise<boolean, { spec: PhaseSpec; findings: AuditFinding[]; attempt: number }>>;
-			};
+		},
+		actors: {
+			execute: fromPromise<
+				ExecutorResult,
+				{ spec: PhaseSpec; attempt: number; steer: string | null }
+			>(async ({ input }) =>
+				runExecutor(input.spec, input.attempt, input.steer, {
+					workspaceDir: env.workspaceDir,
+					rpcAgent: env.rpcAgent,
+					log: env.log,
+					onStatus: env.onStatus,
+					onLoader: env.onLoader,
+				}),
+			),
+			structural: fromPromise<AuditFinding[]>(async () =>
+				runStructuralAudit(
+					env.workspaceDir,
+					env.rulesDir,
+					env.getEnabledRules(),
+				),
+			),
+			semantic: fromPromise<AuditFinding[]>(async () =>
+				runSemanticAudit({
+					workspaceDir: env.workspaceDir,
+					rpcAgent: env.rpcAgent,
+					onStatus: env.onStatus,
+					onLoader: env.onLoader,
+					log: env.log,
+				}),
+			),
+			remediate: fromPromise<
+				boolean,
+				{ spec: PhaseSpec; findings: AuditFinding[]; attempt: number }
+			>(async ({ input }) =>
+				runRemediation(
+					input.spec,
+					input.findings,
+					input.attempt,
+					env.maxAttempts,
+					{
+						workspaceDir: env.workspaceDir,
+						rpcAgent: env.rpcAgent,
+						log: env.log,
+						onStatus: env.onStatus,
+						onLoader: env.onLoader,
+					},
+				),
+			),
 		},
 	}).createMachine({
 		id: "phase",
@@ -135,7 +185,8 @@ function phaseMachine(env: BakeEnv) {
 							guard: ({ event }) => event.output.status === "BLOCKED",
 							target: "failed",
 							actions: ({ context, event }) => {
-								context.blockReason = event.output.blockReason ?? "No reason given";
+								context.blockReason =
+									event.output.blockReason ?? "No reason given";
 								env.log.append("executor_blocked", {
 									phase: context.spec.phaseId,
 									reason: context.blockReason,
@@ -146,7 +197,8 @@ function phaseMachine(env: BakeEnv) {
 							guard: ({ event }) => event.output.status === "NEEDS_CONTEXT",
 							target: "contextWait",
 							actions: ({ context, event }) => {
-								context.blockReason = event.output.blockReason ?? "No details given";
+								context.blockReason =
+									event.output.blockReason ?? "No details given";
 								env.log.append("executor_needs_context", {
 									phase: context.spec.phaseId,
 									reason: context.blockReason,
@@ -157,7 +209,10 @@ function phaseMachine(env: BakeEnv) {
 							// DONE or DONE_WITH_CONCERNS → auditing
 							target: "auditing",
 							actions: ({ context, event }) => {
-								if (event.output.status === "DONE_WITH_CONCERNS" && event.output.concerns) {
+								if (
+									event.output.status === "DONE_WITH_CONCERNS" &&
+									event.output.concerns
+								) {
 									context.concerns = event.output.concerns;
 									env.log.append("executor_concerns", {
 										phase: context.spec.phaseId,
@@ -169,7 +224,9 @@ function phaseMachine(env: BakeEnv) {
 					],
 					onError: {
 						target: "remediating",
-						actions: ({ context }) => { context.attempt++; },
+						actions: ({ context }) => {
+							context.attempt++;
+						},
 					},
 				},
 			},
@@ -181,7 +238,7 @@ function phaseMachine(env: BakeEnv) {
 						target: "executing",
 						actions: ({ context, event }) => {
 							context.blockReason = null;
-							env.pendingSteer = () => event.info;
+							env.provideContext(event.info);
 						},
 					},
 					ABORT: { target: "failed" },
@@ -198,8 +255,16 @@ function phaseMachine(env: BakeEnv) {
 								invoke: {
 									src: "structural",
 									onDone: [
-										{ guard: ({ event }) => event.output.length === 0, target: "pass" },
-										{ target: "fail", actions: ({ context, event }) => { context.findings.push(...event.output); } },
+										{
+											guard: ({ event }) => event.output.length === 0,
+											target: "pass",
+										},
+										{
+											target: "fail",
+											actions: ({ context, event }) => {
+												context.findings.push(...event.output);
+											},
+										},
 									],
 									onError: { target: "fail" },
 								},
@@ -215,10 +280,27 @@ function phaseMachine(env: BakeEnv) {
 								invoke: {
 									src: "semantic",
 									onDone: [
-										{ guard: ({ event }) => event.output.length === 0, target: "pass" },
-										{ target: "fail", actions: ({ context, event }) => { context.findings.push(...event.output); } },
+										{
+											guard: ({ event }) => event.output.length === 0,
+											target: "pass",
+										},
+										{
+											target: "fail",
+											actions: ({ context, event }) => {
+												context.findings.push(...event.output);
+											},
+										},
 									],
-									onError: { target: "fail" },
+									onError: {
+										target: "fail",
+										actions: ({ context, event }) => {
+											context.findings.push({
+												check: 0,
+												detail: `Semantic audit crashed: ${(event.error as Error)?.message || "unknown error"}. The audit did not complete.`,
+												source: "llm",
+											});
+										},
+									},
 								},
 							},
 							pass: { type: "final" },
@@ -227,7 +309,10 @@ function phaseMachine(env: BakeEnv) {
 					},
 				},
 				onDone: [
-					{ guard: ({ context }) => context.findings.length === 0, target: "completed" },
+					{
+						guard: ({ context }) => context.findings.length === 0,
+						target: "completed",
+					},
 					{ target: "remediating" },
 				],
 			},
@@ -277,172 +362,143 @@ function phaseMachine(env: BakeEnv) {
 	});
 }
 
-/** Wire concrete actor implementations into a phase machine. */
-function wirePhaseMachine(pm: ReturnType<typeof phaseMachine>, env: BakeEnv) {
-	return pm.provide({
-		actors: {
-			execute: fromPromise<ExecutorResult, { spec: PhaseSpec; attempt: number; steer: string | null }>(
-				async ({ input }) => runExecutor(input.spec, input.attempt, input.steer, {
-					workspaceDir: env.workspaceDir,
-					rpcAgent: env.rpcAgent,
-					log: env.log,
-					onStatus: env.onStatus,
-					onLoader: env.onLoader,
-				}),
-			),
-			structural: fromPromise<AuditFinding[]>(
-				async () => runStructuralAudit(env.workspaceDir, env.rulesDir, env.getEnabledRules()),
-			),
-			semantic: fromPromise<AuditFinding[]>(
-				async () => runSemanticAudit({
-					workspaceDir: env.workspaceDir,
-					rpcAgent: env.rpcAgent,
-					onStatus: env.onStatus,
-					onLoader: env.onLoader,
-					log: env.log,
-				}),
-			),
-			remediate: fromPromise<boolean, { spec: PhaseSpec; findings: AuditFinding[]; attempt: number }>(
-				async ({ input }) => runRemediation(
-					input.spec,
-					input.findings,
-					input.attempt,
-					env.maxAttempts,
-					{
-						workspaceDir: env.workspaceDir,
-						rpcAgent: env.rpcAgent,
-						log: env.log,
-						onStatus: env.onStatus,
-						onLoader: env.onLoader,
-					},
-				),
-			),
-		},
-	});
-}
-
 // ─── Main entry point ────────────────────────────────────────────────
 
 /**
  * Run the full DAG pipeline with XState orchestration.
  *
+ * This runs the DAG batch loop directly (not inside an XState actor)
+ * because XState v5's fromPromise does not provide spawnChild in its
+ * callback — the scheduling loop must use createActor directly.
+ *
  * Steps:
- *   1. Build PhaseMachine with wired actors
- *   2. Build a fromPromise actor that runs the DAG batch loop
- *   3. Create/spawn parent BakeMachine with the DAG actor
- *   4. waitFor() terminal state, return aggregate results
+ *   1. Build a single PhaseMachine with actors wired via closure
+ *   2. DAG loop: computeReady batch → createActor for each → waitFor done
+ *   3. Aggregate results per batch → return passed + results map
  */
 export async function runBakePipeline(
 	phases: PhaseSpec[],
 	env: BakeEnv,
 ): Promise<{ passed: boolean; results: Record<string, PhaseResult> }> {
-	const phaseSpecs = new Map(phases.map((p) => [p.phaseId, p]));
 	const completedMap: Record<string, PhaseResult> = {};
+	const skipped = new Set<string>();
 
-	// Build and wire the phase machine
-	const rawPm = phaseMachine(env);
-	const pmWired = wirePhaseMachine(rawPm, env);
+	// Build the wired phase machine (actors wired in setup() via closure)
+	const pm = phaseMachine(env);
 
-	// ── DAG scheduler actor ──
-	const dagScheduler = fromPromise<boolean>(async ({ spawnChild }) => {
-		const skipped = new Set<string>();
+	const isReady = (p: PhaseSpec): boolean => {
+		if (completedMap[p.phaseId] || skipped.has(p.phaseId)) return false;
+		return p.dependsOn.every((d) => completedMap[d] || skipped.has(d));
+	};
 
-		const isReady = (phaseId: string): boolean => {
-			if (completedMap[phaseId] || skipped.has(phaseId)) return false;
-			const p = phaseSpecs.get(phaseId)!;
-			return p.dependsOn.every((d) => completedMap[d] || skipped.has(d));
-		};
+	const allDone = (): boolean =>
+		phases.every((p) => completedMap[p.phaseId] || skipped.has(p.phaseId));
 
-		const allDone = (): boolean =>
-			phases.every((p) => completedMap[p.phaseId] || skipped.has(p.phaseId));
-
-		while (!allDone()) {
-			const ready = phases.filter(isReady);
-			if (ready.length === 0) {
-				const stuck = phases.filter((p) => !completedMap[p.phaseId] && !skipped.has(p.phaseId));
-				env.log.append("dag_deadlock", { phases: stuck.map((p) => p.phaseId) });
-				return false;
-			}
-
-			env.onStatus?.(`Active: ${ready.map((p) => p.name).join(", ")}`);
-
-			// Spawn child phase machines
-			const children: ActorRefFrom<any>[] = ready.map((r) =>
-				spawnChild(pmWired, { input: { spec: r } }),
+	while (!allDone()) {
+		const ready = phases.filter(isReady);
+		if (ready.length === 0) {
+			const stuck = phases.filter(
+				(p) => !completedMap[p.phaseId] && !skipped.has(p.phaseId),
 			);
-
-			// Wait for all to reach final state
-			const batchResults = await Promise.allSettled(
-				children.map((c) =>
-					waitFor(c, (s) => s.status === "done").then((s) => s.output as PhaseResult),
-				),
-			);
-
-			// Aggregate
-			let batchFailed = false;
-			for (let i = 0; i < batchResults.length; i++) {
-				const r = batchResults[i];
-				const p = ready[i];
-				if (r.status === "rejected") {
-					completedMap[p.phaseId] = { phase: p.phaseId, passed: false, attempts: 0, findings: [] };
-					batchFailed = true;
-					env.log.append("phase_crash", { phase: p.phaseId, error: String(r.reason) });
-				} else {
-					const result = r.value;
-					completedMap[p.phaseId] = result;
-					if (result.passed === true) {
-						env.log.append("phase_pass", { phase: p.phaseId });
-						archivePhaseFile(p, env.completedDir);
-					} else {
-						batchFailed = true;
-						env.log.append("phase_fail", { phase: p.phaseId, attempts: result.attempts });
-					}
-				}
-			}
-
-			// Notify parent of progress
-			const doneCount = Object.keys(completedMap).length;
-			env.onProgress?.(doneCount, phases.length, ready.map((r) => r.name));
-
-			if (batchFailed) return false;
+			env.log.append("dag_deadlock", { phases: stuck.map((p) => p.phaseId) });
+			return { passed: false, results: completedMap };
 		}
 
-		return true;
-	});
+		env.onStatus?.(`Active: ${ready.map((p) => p.name).join(", ")}`);
 
-	// ── Parent machine ──
-	const parentMachine = createMachine({
-		id: "bake",
-		initial: "idle",
-		context: { phases, completed: completedMap },
-		states: {
-			idle: { on: { START: "running" } },
-			running: {
-				invoke: { src: "dagScheduler" },
-				onDone: { target: "done" },
-				onError: { target: "failed" },
-			},
-			done: { type: "final" },
-			failed: { type: "final" },
-		},
-	}).provide({
-		actors: { dagScheduler },
-	});
+		// Create child phase machine actors with createActor (not spawnChild)
+		const children = ready.map((r) => createActor(pm, { input: { spec: r } }));
 
-	// ── Run ──
-	const actor = createActor(parentMachine);
-	actor.start();
-	actor.send({ type: "START" });
+		// Start all children
+		children.forEach((c) => c.start());
 
-	const finalState = await waitFor(
-		actor,
-		(state) => state.matches("done") || state.matches("failed"),
-	);
+		// Wait for all to reach final state
+		const batchResults = await Promise.allSettled(
+			children.map((c) =>
+				waitFor(c, (s) => s.status === "done").then(
+					(s) => s.output as PhaseResult,
+				),
+			),
+		);
 
-	const passed = finalState.matches("done");
-	actor.stop();
+		// Sync external skips (from /bake-skip during batch execution) into local set
+		for (const phase of phases) {
+			if (env.isSkipped(phase.name)) {
+				skipped.add(phase.phaseId);
+			}
+		}
 
-	return { passed, results: completedMap };
+		// Aggregate
+		let batchFailed = false;
+		for (let i = 0; i < batchResults.length; i++) {
+			const r = batchResults[i];
+			const p = ready[i];
+
+			// Phase was externally skipped — don't treat as failure
+			if (env.isSkipped(p.name)) {
+				skipped.add(p.phaseId);
+				env.log.append("phase_externally_skipped", { phase: p.phaseId });
+				continue;
+			}
+
+			if (r.status === "rejected") {
+				// Retry requested for this phase — re-queue by skipping completedMap
+				if (env.consumeRetry(p.phaseId)) {
+					env.log.append("phase_retry", { phase: p.phaseId });
+					continue;
+				}
+				completedMap[p.phaseId] = {
+					phase: p.phaseId,
+					passed: false,
+					attempts: 0,
+					findings: [],
+				};
+				batchFailed = true;
+				env.log.append("phase_crash", {
+					phase: p.phaseId,
+					error: String(r.reason),
+				});
+			} else {
+				const result = r.value;
+				if (result.passed !== true) {
+					// Retry requested for this phase — re-queue by skipping completedMap
+					if (env.consumeRetry(p.phaseId)) {
+						env.log.append("phase_retry", { phase: p.phaseId });
+						continue;
+					}
+					// Phase was externally skipped during execution
+					if (env.isSkipped(p.name)) {
+						skipped.add(p.phaseId);
+						env.log.append("phase_externally_skipped", { phase: p.phaseId });
+						continue;
+					}
+				}
+				completedMap[p.phaseId] = result;
+				if (result.passed === true) {
+					env.log.append("phase_pass", { phase: p.phaseId });
+					archivePhaseFile(p, env.completedDir);
+				} else {
+					batchFailed = true;
+					env.log.append("phase_fail", {
+						phase: p.phaseId,
+						attempts: result.attempts,
+					});
+				}
+			}
+		}
+
+		// Notify parent of progress
+		const doneCount = Object.keys(completedMap).length;
+		env.onProgress?.(
+			doneCount,
+			phases.length,
+			ready.map((r) => r.name),
+		);
+
+		if (batchFailed) return { passed: false, results: completedMap };
+	}
+
+	return { passed: true, results: completedMap };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -452,7 +508,10 @@ function archivePhaseFile(spec: PhaseSpec, completedDir: string): void {
 	try {
 		fs.copyFileSync(spec.filePath, dest);
 		fs.unlinkSync(spec.filePath);
-	} catch {
-		/* race: already archived by sibling */
+	} catch (err: any) {
+		// ENOENT means already archived by a sibling — other errors propagate
+		if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+			throw err;
+		}
 	}
 }

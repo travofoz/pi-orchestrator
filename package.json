@@ -20,5 +20,8 @@
   },
   "dependencies": {
     "xstate": "^5.32.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1"
   }
 }

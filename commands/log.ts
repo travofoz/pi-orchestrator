@@ -3,8 +3,7 @@ import { bakeCtx } from "./ctx.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-log", {
-		description: "Show recent bake events",
-		usage: "[count=20]",
+		description: "Show recent bake events (default: 20, max: 100)",
 		handler: async (args, cmdCtx) => {
 			const bake = bakeCtx.bake;
 			if (!bake) return;

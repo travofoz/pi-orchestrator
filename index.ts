@@ -81,7 +81,9 @@ class BakeWidget implements Component {
 			const parts: string[] = [];
 			const active = state.activePhases || [];
 			if (active.length > 1) {
-				parts.push(`${t.fg("success", "●")} ${t.fg("accent", `${active.length} phases`)}`);
+				parts.push(
+					`${t.fg("success", "●")} ${t.fg("accent", `${active.length} phases`)}`,
+				);
 			} else if (state.currentPhase) {
 				parts.push(
 					`${t.fg("success", "●")} ${t.fg("accent", state.currentPhase)}`,
@@ -89,8 +91,10 @@ class BakeWidget implements Component {
 			}
 			const done = state.completedPhases.length + state.skippedPhases.length;
 			const pending = allPhases.length - done;
-			if (state.completedPhases.length) parts.push(`${t.fg("success", `✓${state.completedPhases.length}`)}`);
-			if (state.skippedPhases.length) parts.push(`${t.fg("warning", `⏸${state.skippedPhases.length}`)}`);
+			if (state.completedPhases.length)
+				parts.push(`${t.fg("success", `✓${state.completedPhases.length}`)}`);
+			if (state.skippedPhases.length)
+				parts.push(`${t.fg("warning", `⏸${state.skippedPhases.length}`)}`);
 			if (pending > 0) parts.push(`${t.fg("dim", `○${pending}`)}`);
 			const label =
 				state.status === "idle"
@@ -108,7 +112,7 @@ class BakeWidget implements Component {
 		const elapsed = (Date.now() - this.startTime) / 1000;
 		const scanPos = Math.abs(Math.sin(elapsed * 1.2));
 		const doneCount = state.completedPhases.length + state.skippedPhases.length;
-		const phaseLines = allPhases.map((phase) => {
+		const phaseLines = allPhases.map((phase, idx) => {
 			if (state.completedPhases.includes(phase)) {
 				return ` ${t.fg("success", "✓")} ${t.fg("muted", phase)}`;
 			}
@@ -119,7 +123,6 @@ class BakeWidget implements Component {
 			if (state.activePhases?.includes(phase) || state.currentPhase === phase) {
 				return `${t.fg("success", "●")} ${t.fg("accent", phase)}`;
 			}
-			const idx = allPhases.indexOf(phase);
 			if (idx < doneCount) {
 				return ` ${t.fg("dim", "○")} ${t.fg("dim", phase)}`;
 			}
@@ -128,9 +131,8 @@ class BakeWidget implements Component {
 
 		// Show active phase count in header suffix when parallel
 		const activeCount = state.activePhases?.length || 0;
-		const headerLabel = activeCount > 1
-			? `bake (${activeCount} active)`
-			: "bake";
+		const headerLabel =
+			activeCount > 1 ? `bake (${activeCount} active)` : "bake";
 		const header = scannerTaper(width - 2, scanPos, t, headerLabel);
 		return [header, ...phaseLines];
 	}
@@ -152,7 +154,9 @@ export default function (pi: ExtensionAPI) {
 			if (!fs.existsSync(wsLink)) {
 				fs.symlinkSync(WORKSPACE_DIR, wsLink, "dir");
 			}
-		} catch { /* non-fatal */ }
+		} catch {
+			/* non-fatal: workspace symlink is a convenience, not required */
+		}
 
 		if (!fs.existsSync(PHASES_DIR)) {
 			fs.mkdirSync(PHASES_DIR, { recursive: true });
@@ -162,13 +166,17 @@ export default function (pi: ExtensionAPI) {
 			if (!fs.existsSync(phLink)) {
 				fs.symlinkSync(PHASES_DIR, phLink, "dir");
 			}
-		} catch { /* non-fatal */ }
+		} catch {
+			/* non-fatal: phases symlink is a convenience, not required */
+		}
 
 		// Sanity-check state
 		const initial = bakeCtx.bake.stateSnapshot;
 		if (!["idle", "done"].includes(initial.status)) {
 			const pendingPhases = getPhaseList().filter(
-				(p) => !initial.completedPhases.includes(p) && !initial.skippedPhases.includes(p),
+				(p) =>
+					!initial.completedPhases.includes(p) &&
+					!initial.skippedPhases.includes(p),
 			);
 			if (pendingPhases.length === 0) bakeCtx.bake.resetState();
 		}
@@ -222,10 +230,6 @@ export default function (pi: ExtensionAPI) {
 			if (s.status === "done" || s.status === "failed" || s.status === "idle") {
 				ctx.ui.setWorkingIndicator();
 				ctx.ui.setStatus("bake", t.fg("dim", "⏎ bake ready"));
-				if (bakeCtx.closeLoader) {
-					bakeCtx.closeLoader();
-					bakeCtx.closeLoader = null;
-				}
 			}
 			// Reset widget scanner timer on clean/idle transition (bake-reset)
 			if (s.status === "idle") {
@@ -234,17 +238,14 @@ export default function (pi: ExtensionAPI) {
 		});
 
 		// ── Status line ──
-		bakeCtx.bake.onStatus((msg) => ctx.ui.setStatus("bake", t.fg("accent", t.bold(`● ${msg}`))));
+		bakeCtx.bake.onStatus((msg) =>
+			ctx.ui.setStatus("bake", t.fg("accent", t.bold(`● ${msg}`))),
+		);
 		ctx.ui.setStatus("bake", t.fg("dim", "⏎ bake ready"));
 
-		// ── Loader ──
-		bakeCtx.bake.onLoader((show, msg) => {
-			bakeCtx.loaderMsg = msg;
+		// ── Status from loader ──
+		bakeCtx.bake.onLoader((_show, msg) => {
 			ctx.ui.setStatus("bake", t.fg("accent", t.bold(`● ${msg}`)));
-			if (!show && bakeCtx.closeLoader) {
-				bakeCtx.closeLoader();
-				bakeCtx.closeLoader = null;
-			}
 		});
 	});
 }

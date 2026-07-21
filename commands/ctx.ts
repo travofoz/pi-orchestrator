@@ -54,7 +54,10 @@ export const DEFAULT_CONFIG: BakeConfig = { widgetMode: "full" };
 export const loadConfig = (): BakeConfig => {
 	try {
 		if (fs.existsSync(CONFIG_FILE)) {
-			return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")) };
+			return {
+				...DEFAULT_CONFIG,
+				...JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")),
+			};
 		}
 	} catch {
 		/* fall through */
@@ -99,15 +102,16 @@ export const saveRulesState = (state: Record<string, boolean>): void => {
 export const getRuleFiles = (): string[] => {
 	const baseDir = path.join(RULES_DIR, "base");
 	if (!fs.existsSync(baseDir)) return [];
-	return fs.readdirSync(baseDir).filter((f) => f.endsWith(".yml")).sort();
+	return fs
+		.readdirSync(baseDir)
+		.filter((f) => f.endsWith(".yml"))
+		.sort();
 };
 
 // ─── Mutable references (set by index.ts session_start, read by commands) ──
 
 export const bakeCtx: {
 	bake: Bake | null;
-	closeLoader: (() => void) | null;
-	loaderMsg: string;
 	/** Triggers a TUI re-render (so widget Component picks up new state). Set by widget factory. */
 	requestWidgetRender: (() => void) | null;
 	/** When true, BakeWidget.render() returns empty (no widget visible). Toggled by overlay commands. */
@@ -116,8 +120,6 @@ export const bakeCtx: {
 	widgetRef: { reset: () => void } | null;
 } = {
 	bake: null,
-	closeLoader: null,
-	loaderMsg: "",
 	requestWidgetRender: null,
 	widgetHidden: false,
 	widgetRef: null,

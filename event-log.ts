@@ -36,35 +36,46 @@ export class EventLog {
 		}
 	}
 
-	/** Flush buffered writes to disk so reads see the latest events. */
-	private flushStream(): void {
-		if (this.stream) {
-			// Calling cork/uncork flushes the internal buffer without closing
-			this.stream.cork();
-			this.stream.uncork();
-		}
-	}
-
-	/** Read the last N events (newest first). */
+	/**
+	 * Read the last N events (newest first).
+	 *
+	 * When the write stream is active, reads the on-disk log file directly.
+	 * The OS page cache typically provides sub-ms reads, so no explicit
+	 * fsync is needed for diagnostic visibility.
+	 * Malformed lines are silently skipped.
+	 */
 	tail(n: number = 20): BakeEvent[] {
-		this.flushStream();
 		if (!fs.existsSync(this.logPath)) return [];
 		const content = fs.readFileSync(this.logPath, "utf-8");
 		const lines = content.trim().split("\n").filter(Boolean);
 		const last = lines.slice(-n);
-		return last.map((line) => JSON.parse(line) as BakeEvent);
+		const result: BakeEvent[] = [];
+		for (const line of last) {
+			try {
+				result.push(JSON.parse(line) as BakeEvent);
+			} catch {
+				// Skip malformed lines (e.g. partial write during crash)
+			}
+		}
+		return result;
 	}
 
 	/** Read all events matching a type. */
 	filter(type: string): BakeEvent[] {
-		this.flushStream();
 		if (!fs.existsSync(this.logPath)) return [];
 		const content = fs.readFileSync(this.logPath, "utf-8");
 		return content
 			.trim()
 			.split("\n")
 			.filter(Boolean)
-			.map((line) => JSON.parse(line) as BakeEvent)
+			.map((line) => {
+				try {
+					return JSON.parse(line) as BakeEvent;
+				} catch {
+					return null;
+				}
+			})
+			.filter((e): e is BakeEvent => e !== null)
 			.filter((e) => e.type === type);
 	}
 

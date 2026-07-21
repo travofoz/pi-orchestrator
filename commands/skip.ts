@@ -5,8 +5,8 @@ import { bakeCtx, getPhaseList } from "./ctx.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-skip", {
-		description: "Skip a phase. With no args, opens a picker.",
-		usage: "[phase-name]",
+		description:
+			"Skip a phase. With no args, opens a picker. Usage: /bake-skip <phase-name>",
 		handler: async (args, cmdCtx) => {
 			const bake = bakeCtx.bake;
 			if (!bake) return;
@@ -15,14 +15,15 @@ export function register(pi: ExtensionAPI): void {
 
 			// If a phase name is given directly, skip it
 			if (args) {
-				// Handle both string args and parsed-object args
-				// (pi may parse `[phase-name]` into an object)
-				const phaseName = typeof args === "string" ? args : String(args._?.[0] || args[0] || "");
+				const phaseName = String(args).trim();
 				if (phaseName) {
 					bake.skipPhase(phaseName);
 					cmdCtx.ui.notify(t.fg("warning", `Skipped: ${phaseName}`), "info");
 				} else {
-					cmdCtx.ui.notify(t.fg("error", "Usage: /bake-skip <phase-name>"), "info");
+					cmdCtx.ui.notify(
+						t.fg("error", "Usage: /bake-skip <phase-name>"),
+						"info",
+					);
 				}
 				return;
 			}
@@ -30,7 +31,9 @@ export function register(pi: ExtensionAPI): void {
 			// Otherwise show a picker of uncompleted phases
 			const allPhases = getPhaseList();
 			const pending = allPhases.filter(
-				(p) => !state.completedPhases.includes(p) && !state.skippedPhases.includes(p),
+				(p) =>
+					!state.completedPhases.includes(p) &&
+					!state.skippedPhases.includes(p),
 			);
 			if (pending.length === 0) {
 				cmdCtx.ui.notify(t.fg("dim", "No phases to skip"), "info");
@@ -40,36 +43,38 @@ export function register(pi: ExtensionAPI): void {
 			const items = pending.map((p) => ({
 				value: p,
 				label: p === state.currentPhase ? `${p} (current)` : p,
-				description: p === state.currentPhase ? "Currently running phase" : undefined,
+				description:
+					p === state.currentPhase ? "Currently running phase" : undefined,
 			}));
 
+			let selected: string | null = null;
 			bakeCtx.widgetHidden = true;
 			try {
-			const selected = await cmdCtx.ui.custom<string | null>(
-				(tui, theme, _kb, done) => {
-					const ov = new Overlay(theme, { title: "Skip Phase" });
+				selected = await cmdCtx.ui.custom<string | null>(
+					(tui, theme, _kb, done) => {
+						const ov = new Overlay(theme, { title: "Skip Phase" });
 
-					const list = new SelectList(items, Math.min(items.length, 10), {
-						selectedPrefix: (s) => theme.fg("warning", s),
-						selectedText: (s) => theme.fg("text", s),
-						description: (s) => theme.fg("muted", s),
-						scrollInfo: (s) => theme.fg("dim", s),
-						noMatch: (s) => theme.fg("error", s),
-					});
-					list.onSelect = (v) => done(v);
-					list.onCancel = () => done(null);
-					ov.addBody(list);
-					ov.addFooter("↑↓ navigate  ·  enter skip  ·  esc cancel");
+						const list = new SelectList(items, Math.min(items.length, 10), {
+							selectedPrefix: (s) => theme.fg("warning", s),
+							selectedText: (s) => theme.fg("text", s),
+							description: (s) => theme.fg("muted", s),
+							scrollInfo: (s) => theme.fg("dim", s),
+							noMatch: (s) => theme.fg("error", s),
+						});
+						list.onSelect = (v) => done(v.value);
+						list.onCancel = () => done(null);
+						ov.addBody(list);
+						ov.addFooter("↑↓ navigate  ·  enter skip  ·  esc cancel");
 
-					return {
-						render: (w) => ov.render(w),
-						invalidate: () => ov.invalidate(),
-						handleInput: (data) => list.handleInput(data),
-						dispose: () => ov.dispose(),
-					};
-				},
-				{ overlay: true },
-			);
+						return {
+							render: (w) => ov.render(w),
+							invalidate: () => ov.invalidate(),
+							handleInput: (data) => list.handleInput(data),
+							dispose: () => ov.dispose(),
+						};
+					},
+					{ overlay: true },
+				);
 			} finally {
 				bakeCtx.widgetHidden = false;
 				bakeCtx.requestWidgetRender?.();

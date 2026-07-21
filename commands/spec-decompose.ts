@@ -3,7 +3,6 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { tryParseJSON } from "../lib/json-utils.ts";
 import { buildDecomposePrompt, buildReadmePrompt } from "../lib/prompts.ts";
-import { showLoaderOverlay } from "../lib/overlay.ts";
 import {
 	writeDagManifest,
 	writePhaseFiles,
@@ -17,12 +16,11 @@ import { bakeCtx, BAKE_BASE, BAKE_DB_DIR, PHASES_DIR } from "./ctx.ts";
  *
  * Orchestrates the decompose flow:
  * 1. Validate args → read spec
- * 2. Show loader overlay
- * 3. Call LLM with decompose prompt
- * 4. Parse/repair JSON response
- * 5. Write phase files, DAG manifest, context
- * 6. Archive source spec if needed
- * 7. Fire-and-forget README generation
+ * 2. Call LLM with decompose prompt (status + notify, no custom overlay)
+ * 3. Parse/repair JSON response
+ * 4. Write phase files, DAG manifest, context
+ * 5. Archive source spec if needed
+ * 6. Fire-and-forget README generation
  */
 async function handleDecompose(
 	args: string | undefined,
@@ -30,13 +28,19 @@ async function handleDecompose(
 ): Promise<void> {
 	const bake = bakeCtx.bake;
 	if (!bake) {
-		cmdCtx.ui.notify(cmdCtx.ui.theme.fg("error", "Bake not initialized"), "info");
+		cmdCtx.ui.notify(
+			cmdCtx.ui.theme.fg("error", "Bake not initialized"),
+			"info",
+		);
 		return;
 	}
 	const t = cmdCtx.ui.theme;
 
 	if (!args) {
-		cmdCtx.ui.notify(t.fg("error", "Usage: /bake-spec-decompose <path>"), "info");
+		cmdCtx.ui.notify(
+			t.fg("error", "Usage: /bake-spec-decompose <path>"),
+			"info",
+		);
 		return;
 	}
 
@@ -51,16 +55,9 @@ async function handleDecompose(
 
 	cmdCtx.ui.setStatus("bake", t.fg("accent", "○ Decomposing spec..."));
 
-	bakeCtx.loaderMsg = "Decomposing spec...";
-	let aborted = false;
-
-	const overlay = showLoaderOverlay(
-		cmdCtx.ui,
-		() => bakeCtx.loaderMsg,
-		() => {
-			aborted = true;
-			bake?.abort();
-		},
+	cmdCtx.ui.notify(
+		t.fg("dim", "Decomposing spec via LLM (may take a moment)"),
+		"info",
 	);
 
 	try {
@@ -75,16 +72,17 @@ async function handleDecompose(
 			jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
 		}
 
-		const rawLogPath = path.join(BAKE_BASE, ".bake", "decompose-raw-output.txt");
+		const rawLogPath = path.join(
+			BAKE_BASE,
+			".bake",
+			"decompose-raw-output.txt",
+		);
 
 		let decomposition: any;
 		try {
 			decomposition = tryParseJSON(jsonStr, rawLogPath);
 		} catch (parseErr: any) {
-			cmdCtx.ui.notify(
-				t.fg("error", `Decompose: ${parseErr.message}`),
-				"info",
-			);
+			cmdCtx.ui.notify(t.fg("error", `Decompose: ${parseErr.message}`), "info");
 			return;
 		}
 
@@ -101,26 +99,33 @@ async function handleDecompose(
 
 		const archived = archiveSpec(specPath, BAKE_DB_DIR);
 		if (archived) {
-			cmdCtx.ui.notify(t.fg("dim", `Raw spec archived to .bake/archive/`), "info");
+			cmdCtx.ui.notify(
+				t.fg("dim", "Raw spec archived to .bake/archive/"),
+				"info",
+			);
 		}
 
 		cmdCtx.ui.notify(
-			t.fg("success", `${decomposition.phases.length} phases written to phases/`),
+			t.fg(
+				"success",
+				`${decomposition.phases.length} phases written to phases/`,
+			),
 			"info",
 		);
 
 		// Fire-and-forget README generation
 		if (decomposition.context) {
-			generateReadme(bake, decomposition.context, decomposition.phases, t, cmdCtx);
+			generateReadme(
+				bake,
+				decomposition.context,
+				decomposition.phases,
+				t,
+				cmdCtx,
+			);
 		}
 	} catch (err: any) {
-		if (aborted) {
-			cmdCtx.ui.notify(t.fg("warning", "Decompose aborted"), "info");
-		} else {
-			cmdCtx.ui.notify(t.fg("error", `Decompose failed: ${err.message}`), "info");
-		}
+		cmdCtx.ui.notify(t.fg("error", `Decompose failed: ${err.message}`), "info");
 	} finally {
-		overlay.close();
 		cmdCtx.ui.setStatus("bake", t.fg("dim", "⏎ bake ready"));
 	}
 }
@@ -136,7 +141,6 @@ async function generateReadme(
 	t: any,
 	cmdCtx: any,
 ): Promise<void> {
-	bakeCtx.loaderMsg = "Generating README...";
 	bake.setLoader(true, "Generating README...");
 
 	const readmePrompt = buildReadmePrompt(context, phases);
@@ -145,7 +149,11 @@ async function generateReadme(
 		.runPrompt(readmePrompt, "README")
 		.then((readmeContent: string) => {
 			const cleaned = readmeContent.replace(/^```[a-z]*\n?|```$/gm, "").trim();
-			fs.writeFileSync(path.join(BAKE_BASE, "README.md"), cleaned + "\n", "utf-8");
+			fs.writeFileSync(
+				path.join(BAKE_BASE, "README.md"),
+				cleaned + "\n",
+				"utf-8",
+			);
 			cmdCtx.ui.notify(t.fg("success", "README.md generated"), "info");
 		})
 		.catch((err: any) => {
@@ -161,8 +169,8 @@ async function generateReadme(
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-spec-decompose", {
-		description: "Decompose a raw spec file into clean phase files",
-		usage: "<path-to-raw-spec>",
+		description:
+			"Decompose a raw spec file into clean phase files. Usage: /bake-spec-decompose <path>",
 		handler: handleDecompose,
 	});
 }

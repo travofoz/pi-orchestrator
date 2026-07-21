@@ -11,12 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { EventLog } from "./event-log.ts";
 import { RpcAgent } from "./rpc-agent.ts";
-import {
-	runStructuralAudit,
-	type AuditFinding,
-} from "./auditor.ts";
-import { runExecutor, type ExecutorDeps } from "./bake-executor.ts";
-import { runSemanticAudit, runRemediation } from "./bake-audit.ts";
+import type { AuditFinding } from "./auditor.ts";
 import { runBakePipeline, type BakeEnv } from "./bake-machine.ts";
 
 export interface PhaseSpec {
@@ -64,6 +59,8 @@ export class Bake {
 	private _onStatus?: (msg: string) => void;
 	private _onLoader?: (show: boolean, msg: string) => void;
 	private rpcAgent: RpcAgent;
+	/** Phase IDs whose most recent attempt should be retried (transient, not serialized). */
+	private pendingRetry: string[] = [];
 
 	constructor(baseDir: string, workspaceDir: string, rulesDir: string) {
 		this.bakeDir = path.join(baseDir, ".bake");
@@ -110,7 +107,11 @@ export class Bake {
 	}
 
 	private saveState(): void {
-		fs.writeFileSync(this.stateFile, JSON.stringify(this.state, null, 2), "utf-8");
+		fs.writeFileSync(
+			this.stateFile,
+			JSON.stringify(this.state, null, 2),
+			"utf-8",
+		);
 	}
 
 	/**
@@ -120,28 +121,76 @@ export class Bake {
 	 */
 	clean(): void {
 		this.abort();
-		try { this.rpcAgent.close(); } catch { /* ignore */ }
-		try { this.log.close(); } catch { /* ignore */ }
+		try {
+			this.rpcAgent.close();
+		} catch {
+			/* non-fatal during cleanup */
+		}
+		try {
+			this.log.close();
+		} catch {
+			/* non-fatal during cleanup */
+		}
 
 		// Nuke and recreate workspace
-		try { fs.rmSync(this.workspaceDir, { recursive: true, force: true }); } catch { /* ignore */ }
-		try { fs.mkdirSync(this.workspaceDir, { recursive: true }); } catch { /* ignore */ }
+		try {
+			fs.rmSync(this.workspaceDir, { recursive: true, force: true });
+		} catch {
+			/* non-fatal during cleanup */
+		}
+		try {
+			fs.mkdirSync(this.workspaceDir, { recursive: true });
+		} catch {
+			/* non-fatal during cleanup */
+		}
 
 		// Nuke completed dir
-		try { fs.rmSync(this.completedDir, { recursive: true, force: true }); } catch { /* ignore */ }
-		try { fs.mkdirSync(this.completedDir, { recursive: true }); } catch { /* ignore */ }
+		try {
+			fs.rmSync(this.completedDir, { recursive: true, force: true });
+		} catch {
+			/* non-fatal during cleanup */
+		}
+		try {
+			fs.mkdirSync(this.completedDir, { recursive: true });
+		} catch {
+			/* non-fatal during cleanup */
+		}
 
 		// Nuke event log
-		try { fs.rmSync(path.join(this.bakeDir, "events.jsonl"), { force: true }); } catch { /* ignore */ }
+		try {
+			fs.rmSync(path.join(this.bakeDir, "events.jsonl"), { force: true });
+		} catch {
+			/* non-fatal during cleanup */
+		}
 
 		// Nuke archive and spec-context (decomposed specs from prior runs)
-		try { fs.rmSync(path.join(this.bakeDir, "archive"), { recursive: true, force: true }); } catch { /* ignore */ }
-		try { fs.rmSync(path.join(this.bakeDir, "spec-context.md"), { force: true }); } catch { /* ignore */ }
+		try {
+			fs.rmSync(path.join(this.bakeDir, "archive"), {
+				recursive: true,
+				force: true,
+			});
+		} catch {
+			/* non-fatal during cleanup */
+		}
+		try {
+			fs.rmSync(path.join(this.bakeDir, "spec-context.md"), { force: true });
+		} catch {
+			/* non-fatal during cleanup */
+		}
 
 		// Nuke phases dir — reset means reset
-		try { fs.rmSync(this.phasesDir, { recursive: true, force: true }); } catch { /* ignore */ }
-		try { fs.mkdirSync(this.phasesDir, { recursive: true }); } catch { /* ignore */ }
+		try {
+			fs.rmSync(this.phasesDir, { recursive: true, force: true });
+		} catch {
+			/* non-fatal during cleanup */
+		}
+		try {
+			fs.mkdirSync(this.phasesDir, { recursive: true });
+		} catch {
+			/* non-fatal during cleanup */
+		}
 
+		this.pendingRetry = [];
 		this.resetState();
 	}
 
@@ -169,7 +218,7 @@ export class Bake {
 				if (!parsed.activePhases) parsed.activePhases = [];
 				return parsed;
 			} catch {
-				// Corrupted state — start fresh
+				// Corrupted state — start fresh (log not available at construction time)
 			}
 		}
 		return {
@@ -242,7 +291,9 @@ export class Bake {
 				if (dag.has(phaseId)) {
 					dependsOn = dag.get(phaseId)!;
 				} else {
-					const depsMatch = content.match(/^## Depends On\n([^\n]+)/m);
+					const depsMatch = content.match(
+						/^## Depends On\n([\s\S]*?)(?:\n##|$)/m,
+					);
 					if (depsMatch) {
 						dependsOn = depsMatch[1]
 							.split(",")
@@ -265,42 +316,20 @@ export class Bake {
 			});
 	}
 
-	/**
-	 * Compute the next batch of phases whose dependencies are all satisfied.
-	 * Returns phases in a deterministic order.
-	 */
-	private getReadyPhases(
-		phases: PhaseSpec[],
-		completed: Set<string>,
-		skipped: Set<string>,
-	): PhaseSpec[] {
-		const ready: PhaseSpec[] = [];
-		for (const p of phases) {
-			if (completed.has(p.phaseId) || skipped.has(p.phaseId)) continue;
-			const depsMet = p.dependsOn.every(
-				(d) => completed.has(d) || skipped.has(d),
-			);
-			if (depsMet) ready.push(p);
-		}
-		return ready;
-	}
-
-	/** Build the ExecutorDeps object from current Bake state. */
-	private executorDeps(): ExecutorDeps {
-		return {
-			workspaceDir: this.workspaceDir,
-			rpcAgent: this.rpcAgent,
-			log: this.log,
-			onStatus: (msg) => this._onStatus?.(msg),
-			onLoader: (show, msg) => this._onLoader?.(show, msg),
-		};
-	}
-
 	/** Steer: inject guidance into the next executor run. */
 	steer(message: string): void {
 		this.state.pendingSteer = message;
 		this.emitState();
 		this.log.append("steer", { message });
+	}
+
+	/**
+	 * Provide context to unblock a NEEDS_CONTEXT phase.
+	 * Called from the XState machine's PROVIDE_CONTEXT action.
+	 */
+	provideContext(info: string): void {
+		this.state.pendingSteer = info;
+		this.emitState();
 	}
 
 	/** Pause the pipeline after the current attempt. */
@@ -336,19 +365,46 @@ export class Bake {
 			this.state.currentAttempt = 0;
 			this.state.pendingSteer = null;
 		}
+		// Clear all pending retries — the abort reset state, any retry is moot
+		this.pendingRetry = [];
 		this.emitState();
 	}
 
-	/** Retry the current attempt (re-run executor). */
+	/**
+	 * Retry the current attempt (re-run executor).
+	 *
+	 * Sets a pending-retry flag so runBakePipeline can re-create the phase actor.
+	 * The XState actor in flight will be aborted and treated as skipped-for-retry
+	 * by the outer loop, which then picks up the phase again in the next iteration.
+	 */
 	retryAttempt(): void {
-		// Cancel any in-flight operation so a completing executor doesn't race past the retry
-		this.rpcAgent.abort();
+		if (!this.state.currentPhase) {
+			this.log.append("retry_attempt_noop", { reason: "no active phase" });
+			return;
+		}
 
-		this.log.append("retry_attempt", {
-			phase: this.state.currentPhase,
-			attempt: this.state.currentAttempt,
-		});
-		// Don't increment attempt — re-run same attempt
+		// Look up the phaseId for the current phase name
+		const phases = this.getPendingPhases();
+		const current = phases.find((p) => p.name === this.state.currentPhase);
+		if (current) {
+			this.pendingRetry.push(current.phaseId);
+			this.log.append("retry_attempt", {
+				phase: this.state.currentPhase,
+				phaseId: current.phaseId,
+				attempt: this.state.currentAttempt,
+			});
+		} else {
+			this.log.append("retry_attempt_noop", {
+				phase: this.state.currentPhase,
+				reason: "phase not found in pending list",
+			});
+			return;
+		}
+
+		// Cancel in-flight executor so the outer loop picks up the retry
+		this.rpcAgent.abort();
+		this.state.currentAttempt = 0;
+		this.emitState();
 	}
 
 	/**
@@ -356,6 +412,9 @@ export class Bake {
 	 * This is the main entry point for the bake pipeline.
 	 */
 	async runPipeline(): Promise<void> {
+		this.state.status = "running";
+		this.emitState();
+
 		// Start the RPC agent (idempotent)
 		this.rpcAgent.start();
 		this.log.open();
@@ -382,8 +441,19 @@ export class Bake {
 				onLoader: (show, msg) => this._onLoader?.(show, msg),
 				log: this.log,
 				pendingSteer: () => this.state.pendingSteer,
+				provideContext: (info: string) => this.provideContext(info),
+				consumeRetry: (phaseId: string) => {
+					const idx = this.pendingRetry.indexOf(phaseId);
+					if (idx !== -1) {
+						this.pendingRetry.splice(idx, 1);
+						return true;
+					}
+					return false;
+				},
+				isSkipped: (phaseName: string) =>
+					this.state.skippedPhases.includes(phaseName),
 				maxAttempts: this.state.maxAttempts,
-				onProgress: (completed, total, active) => {
+				onProgress: (_completed, _total, active) => {
 					this.state.activePhases = active;
 					this.state.currentPhase = active.length === 1 ? active[0] : null;
 					this.emitState();
