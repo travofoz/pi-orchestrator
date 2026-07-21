@@ -15,7 +15,7 @@ import {
 	loadRulesState,
 	saveRulesState,
 	getRuleFiles,
-} from "./ctx.ts";
+} from "./shared.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-rules", {

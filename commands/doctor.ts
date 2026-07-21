@@ -19,7 +19,7 @@ import {
 	PHASES_DIR,
 	RULES_DIR,
 	CONFIG_FILE,
-} from "./ctx.ts";
+} from "./shared.ts";
 import type { BakeState } from "../bake.ts";
 
 interface CheckResult {

@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, Text, SelectList } from "@earendil-works/pi-tui";
 import { Overlay } from "../components/overlay.ts";
-import { bakeCtx, getPhaseList } from "./ctx.ts";
+import { bakeCtx, getPhaseList } from "./shared.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-skip", {

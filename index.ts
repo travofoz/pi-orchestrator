@@ -40,7 +40,7 @@ import {
 	WIDGET_ID,
 	getPhaseList,
 	loadConfig,
-} from "./commands/ctx.ts";
+} from "./commands/shared.ts";
 import { scannerTaper, type ThemeProxy } from "./components/overlay.ts";
 
 // ThemeProxy has {fg, bg} — used by BakeWidget for scannerTaper / phase rendering

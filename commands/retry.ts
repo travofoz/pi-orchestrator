@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { bakeCtx } from "./ctx.ts";
+import { bakeCtx } from "./shared.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-retry", {

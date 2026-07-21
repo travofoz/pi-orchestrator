@@ -22,6 +22,7 @@ import { register as registerSpecDecompose } from "./spec-decompose.ts";
 import { register as registerConfig } from "./config.ts";
 import { register as registerWidget } from "./widget.ts";
 import { register as registerDoctor } from "./doctor.ts";
+import { register as registerCtx } from "./ctx.ts";
 
 export function registerAll(pi: ExtensionAPI): void {
 	registerStatus(pi);
@@ -39,4 +40,5 @@ export function registerAll(pi: ExtensionAPI): void {
 	registerConfig(pi);
 	registerWidget(pi);
 	registerDoctor(pi);
+	registerCtx(pi);
 }

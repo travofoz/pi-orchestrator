@@ -9,7 +9,7 @@ import {
 	writeContext,
 	archiveSpec,
 } from "../lib/phase-writer.ts";
-import { bakeCtx, BAKE_BASE, BAKE_DB_DIR, PHASES_DIR } from "./ctx.ts";
+import { bakeCtx, BAKE_BASE, BAKE_DB_DIR, PHASES_DIR } from "./shared.ts";
 
 /**
  * Handler for /bake-spec-decompose.

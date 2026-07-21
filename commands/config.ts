@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type SettingsListTheme, SettingsList, Container, Text } from "@earendil-works/pi-tui";
 import { Overlay } from "../components/overlay.ts";
-import { bakeCtx, loadConfig, saveConfig } from "./ctx.ts";
+import { bakeCtx, loadConfig, saveConfig } from "./shared.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-config", {

@@ -10,7 +10,7 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 import { Overlay } from "../components/overlay.ts";
-import { bakeCtx, BAKE_BASE, PHASES_DIR, getPhaseList } from "./ctx.ts";
+import { bakeCtx, BAKE_BASE, PHASES_DIR, getPhaseList } from "./shared.ts";
 
 /** Gather workspace info: git status, package.json, npm latest version. */
 function getWorkspaceInfo(): string[] {

@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { bakeCtx, loadConfig, saveConfig, type WidgetMode } from "./ctx.ts";
+import { bakeCtx, loadConfig, saveConfig, type WidgetMode } from "./shared.ts";
 
 export function register(pi: ExtensionAPI): void {
 	pi.registerCommand("bake-widget", {
